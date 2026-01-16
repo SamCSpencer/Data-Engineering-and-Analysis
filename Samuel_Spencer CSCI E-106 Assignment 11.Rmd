@@ -1,0 +1,436 @@
+---
+title: 'CSCI E-106:Assignment 11'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(ARDL)
+library(urca)
+library(tseries)
+library(lmtest)
+library(desk)
+library(tibble)
+library(tidyr)
+library(knitr)
+library(caret)
+library(ResourceSelection)
+library(tree)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(C50)
+library(adabag)
+library(glmnet)
+library(car)
+library(olsrr)
+```
+
+
+### Due Date: December 5, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+
+
+
+## Problem 1
+
+Refer to the Prostate cancer data set. Serum prostate-specific antigen (PSA) was determined in 97 men with advanced prostate cancer. PSA is a well-established screening test for prostate cancer and the oncologists wanted to examine the correlation between level of PSA and a number of clinical measures for men who were about to undergo radical prostatectomy. The measures are cancer volume, prostate weight, patient age, the amount of benign prostatic hyperplasia, seminal vesicle invasion, capsular penetration, and Gleason score. (100 pts) 
+
+```{r}
+df = read.csv('Prostate Cancer.csv')
+```
+```{r}
+head(df)
+```
+```{r}
+summary(df)
+```
+```{r}
+str(df)
+```
+```{r}
+nrow(df)
+```
+```{r}
+hist(df$`PSA.level`, main="Distribution of PSA Levels",
+     xlab="PSA Levels",
+     col = "darkblue", border = "black")
+```
+```{r}
+pairs(df)
+```
+
+ 
+
+
+
+a-) Use 70% of the data for train data set and use remaining data (30% of data) for test data set (Please use set.seed(567)). (10 points)
+
+```{r}
+set.seed(567)
+# splitting the data. Always put the lowercase 'y'
+split = createDataPartition(y = df$`PSA.level`, p = .7, list = FALSE)
+train = df[split,]
+test = df[-split,]
+```
+```{r}
+head(train)
+head(test)
+```
+```{r}
+str(train)
+```
+
+```{r}
+str(test)
+```
+
+```{r}
+70 / (70+27)
+```
+
+
+
+## use the train data set for the questions below
+
+b-) Develop a best subset model for predicting PSA. Justify your choice of model. Assess the model performance and check the model assumptions.(10 pts)
+
+```{r}
+lm = lm(`PSA.level` ~., data = train)
+summary(lm)
+```
+```{r}
+library(car)
+vif(lm)
+```
+
+```{r}
+ols_step_best_subset(lm,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+```{r}
+ols_step_both_p(lm,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+```{r}
+#Creating reduced model using the 3 variables with the highest Adjusted 
+# R-squared using the best subset test
+redlm1 = lm(`PSA.level` ~ `Cancer.volume` + `Seminal.vesicle.invasion` + `Gleason.score`, data = train)
+summary(redlm1)
+```
+
+```{r}
+# Creating a further reduced model based on significant variables and which is 
+# the model recommended by the both ways stepwise test.
+redlm2 = lm(`PSA.level` ~ `Cancer.volume` + `Seminal.vesicle.invasion`, data = train)
+```
+```{r}
+summary(redlm2)
+```
+```{r}
+anova(redlm2, lm)
+```
+```{r}
+anova(redlm1, lm)
+```
+```{r}
+anova(redlm2, redlm1)
+```
+```{r}
+ols_test_breusch_pagan(redlm2)
+plot(redlm2)
+qchisq(.95, df=1)
+```
+
+```{r}
+# Performing Breusch-Pagan Test on model for even distribution of error
+# homoskedasticity
+bptest(redlm2)
+```
+
+
+Our reduced function is:
+$$
+\hat{\text{PSA.level}}
+= 3.6765
+  + 1.7446*\text{Cancer.volume}_i
+  + 30.3633*\text{Seminal.vesicle.invasion}_i
+$$
+This model was recommended by the both-ways step-wise test. While the best-subset test seemed to indicate that the addition of Gleason.score to the model would increase the model's Adjusted R-squared and make the model perform slightly better in every metric except for SBC, Gleeson.score is still not significant in the model, which is why I decided to drop it. This decision was supported by an ANOVA test between the two reduced models and had a p-value of 0.08974, above our .05 critical value, supporting the decision to drop the predictor. The model itself had a p-value close to zero. However, some analysis of the model showed that the model had some heavy tails, and was likely heteroskedastic, indicating that a linear model is likely not the best way to evaluate the data. 
+
+
+
+
+
+
+c-) Develop a regression tree for predicting PSA. Assess the model performance and check the model assumptions. (15 pts)
+
+```{r}
+# Creating regression tree
+regtree = rpart::rpart(
+  `PSA.level` ~ .,
+  data = train,
+  method = "anova"
+)
+```
+```{r}
+rpart.plot(regtree)
+```
+```{r}
+summary(regtree)
+```
+
+
+```{r}
+printcp(regtree)
+```
+```{r}
+# /identifying weakest branch and pruning it to reduce xerror
+bestcp = regtree$cptable[which.min(regtree$cptable[,"xerror"]), "CP"]
+```
+```{r}
+pruned_tree = prune(regtree, cp = bestcp)
+```
+```{r}
+rpart.plot(pruned_tree)
+```
+```{r}
+summary(pruned_tree)
+```
+
+```{r}
+mse_tree = mean((train$`PSA.level` - predict(pruned_tree))^2)
+```
+```{r}
+mse_tree
+```
+```{r}
+# Creating pseudo-R^2
+r2_tree = 1 - sum((train$`PSA.level` - predict(pruned_tree))^2)/sum((train$PSA.level - mean(train$PSA.level))^2)
+r2_tree
+```
+```{r}
+printcp(pruned_tree)
+```
+
+Our regression tree model is:
+$$
+\hat{\text{PSA.level}}_i =
+\begin{cases} 
+87.73, & \text{if } \text{Cancer.volume}_i \ge 16.36445 \\[1ex]
+27.73, & \text{if } \text{Cancer.volume}_i < 16.36445 \text{ and } \text{Seminal.vesicle.invasion}_i \ge 0.5 \\[1ex]
+11.41, & \text{if } \text{Cancer.volume}_i < 16.36445 \text{ and } \text{Seminal.vesicle.invasion}_i < 0.5
+\end{cases}
+$$
+
+Our regression tree model has come to a similar conclusion as our reduced regression model about which variables are significant and should be included in the model. The pseudo R-squared does not measure the same things as adjusted R-squared so comparing them directly, particularly when the values are similar, can't tell us absolutely which method does a better job of modeling the data. The regression tree is slightly higher with a psuedo R-squared of .47 compared to .40 for the adjusted R-squared for the reduced model, but this is certainly close enough to not make any decisions based upon it. Expected error compared to the relative error in our tree model is quite a bit higher
+at 0.85375 compared to 0.52344, implying that it is likely that the model is quite overfit. There is barely a drop off in both expected error and relative error after the first and second cut, implying that the our last cut isn't doing very much for us and even it could potentially be prunded off as most of the effective sorting is done by the first cut and the second cut is mostly sorting noise.
+
+
+
+d-) Use the lasso regression to predict the PSA level.(15 pts)
+
+```{r}
+#x = as.matrix(train[, -which(names(train) == "Salary")])
+#y = train$Salary 
+# Setting alpha to 1 to do lasso regression
+x = model.matrix(`PSA.level`~.,data=train)[,-c(1)]
+y = train$`PSA.level`
+```
+```{r}
+set.seed(567)
+LassoMod = glmnet(x, y, alpha=1, nlambda=100,lambda.min.ratio=0.0001)
+plot(LassoMod,xvar="norm",label=TRUE)
+CvLassoModel = cv.glmnet(x, y, alpha=1, nlambda=100,lambda.min.ratio=0.0001)
+plot(CvLassoModel)
+best.lambda.lasso = CvLassoModel$lambda.min
+best.lambda.lasso
+coef(CvLassoModel, s = "lambda.min")
+```
+```{r}
+# Creating predicted PSA levels using our lasso model so they can be compared to 
+# the real values using a series of summary statistics
+y_pred_lasso = predict(CvLassoModel, s = 'lambda.min', newx = x)
+
+mse_lasso = mean((y - y_pred_lasso)^2)
+rmse_lasso = sqrt(mse_lasso)
+r2_lasso = 1 - sum((y - y_pred_lasso)^2) / sum((y - mean(y))^2)
+
+mse_lasso
+rmse_lasso
+r2_lasso
+```
+
+Our LASSO regression model is 
+$$
+\hat{\text{PSA.level}}
+= -40.6287
+  + 1.3283*\text{Cancer.volume}_i
+  + 23.2732*\text{Seminal.vesicle.invasion}_i
+  + 7.0952*\text{Gleason.score}_i
+$$
+
+Our LASSO model agreed with our intial reduced linear regression model in terms of which variables are significant, but of course with different coefficients. Our R-squared of LASSO model, 0.4252919, is slightly better than our reduced model, 0.4082618, though apparently *weaker than our tree model, 0.4765619. LASSO typically overfits the data as it tries to create a model that reduces the effects of multicolinearity. Multicolinearity was not much of an issue with out initial data. Instead large tails and heteroskedacity were, which LASSO doesn't help much with. Thus the increase in R-squared is likely due to overfitting. 
+
+
+
+
+
+e-) Based on the performances of the model on the train data set, which model would you choose? (10 pts)
+
+```{r}
+# Predictions on training data using regression tree
+yhat_tree = predict(pruned_tree, newdata = train)
+
+# RMSE on training data
+rmse_tree = sqrt( mean( (train$PSA.level - yhat_tree)^2 ) )
+mse_train = ( mean( (train$PSA.level - yhat_tree)^2 ) )
+
+mse_tree
+rmse_tree
+r2_tree
+```
+```{r}
+summary(redlm2)
+```
+```{r}
+# Creating predicted PSA levels using our lasso model so they can be compared to 
+# the real values using a series of summary statistics
+y_pred_red = predict(redlm2, newx = train)
+
+mse_red = mean((y - y_pred_red)^2)
+rmse_red = sqrt(mse_red)
+r2_red = 1 - sum((y - y_pred_red)^2) / sum((y - mean(y))^2)
+
+mse_red
+rmse_red
+r2_red
+```
+
+Answer: None of our models are perfect. The reduced model has its issues with heteroskedacity and long tails. Meanwhile the regression tree and the LASSO models are likely overfit. The LASSO model likely suffers from the same issues as the reduced model as well. This makes it hard to trust any of their statistics. The regression tree clearly has the best R-squared and RMSE, but due to its likely overfit, I may lean slightly toward the reduced model until the trying against the testing data. However, the regression tree is not affected by things like heteroskedacity and non normal errors, so if it is only a bit overfit compared to the reduced model, then it would be the preferred model in this instance.
+
+
+
+
+## use the test data set for the questions below
+
+f-) Assess the best subset model performance on the test data set. Is the model performance stable (10 pts).
+
+
+```{r}
+# Model prediction stats on training data Homework 4
+predicted_train = predict(redlm2, train)
+
+model_train = data.frame(obs = train$PSA.level, pred = predicted_train)
+
+defaultSummary(model_train)
+```
+```{r}
+#Model prediction stats on test data
+predicted_test = predict(redlm2, test)
+
+model_test = data.frame(obs = test$PSA.level, pred = predicted_test)
+
+defaultSummary(model_test)
+```
+
+```{r}
+# Testing variance
+var(train$PSA.level)
+var(test$PSA.level)
+```
+
+Answer: R-squared increased considerablly from 0.4082618 to  once being applied to the test data. However, so did RMSE and MAE. This indicates that there is likely a signficant difference in variance between the train data and the test data, and some investigation shows that the test set has nearly twice the level of variance. This does not indicate any instability, but it makes it hard to confirm that the model is stable. 
+
+
+
+
+
+g-) Assess the regression tree model performance on the test data set. Is the model performance stable (10 pts).
+
+```{r}
+yhat_tree_test = predict(pruned_tree, newdata = test)
+r2_tree_train = 1 - sum((test$`PSA.level` - yhat_tree_test)^2)/sum((test$PSA.level - mean(test$PSA.level))^2)
+mse_tree_test = mean((test$`PSA.level` - yhat_tree_test)^2)
+rmse_tree_test = sqrt(mse_tree_test)
+mse_tree_test
+rmse_tree_test
+r2_tree_train
+
+```
+Initial values: 
+[1] 704.4206
+[1] 26.54092
+[1] 0.4765619
+```{r}
+# Mean Absolute Error (train) for the regression tree with train data
+mae_tree_train = mean(abs(train$PSA.level - yhat_tree))
+mae_tree_train
+```
+
+```{r}
+# MAE for regression tree tested against test data
+mae_tree_test = mean(abs(test$PSA.level - yhat_tree_test))
+mae_tree_test
+```
+
+Answer: We once again ran into the issues with the variance of the test set vs the train set. However, in this instance, R-squared has dropped pretty significantly from 0.4765619 to 0.3934837. Despite this, the variance barely rose more than we saw with the reduced regression model, likely due to the fact that the fact small regression trees can handle large variance well. The fact that we saw a drop in R-squared despite the variance increase means the RSS is growing even faster than the TSS is growing proportionally. This implies instability and overfitting. However, regression trees are not as strong at extrapolation as other models are. This means that they are more sensitive to being exposed to data with high variance, once again making it hard to evaluate.
+
+
+
+
+h-) Assess the Lasso regression model performance on the test data set. Is the model performance stable (10 pts).
+
+```{r}
+#Evaluating LASSO against the test data
+x = model.matrix(`PSA.level`~.,data=test)[,-c(1)]
+y = test$PSA.level
+y_pred_lasso_test = predict(CvLassoModel, s = 'lambda.min', newx = x)
+
+mse_lasso_test = mean((y - y_pred_lasso_test)^2)
+rmse_lasso_test = sqrt(mse_lasso_test)
+r2_lasso_test = 1 - sum((y - y_pred_lasso_test)^2) / sum((y - mean(y))^2)
+
+mse_lasso_test
+rmse_lasso_test
+r2_lasso_test
+
+mse_lasso
+rmse_lasso
+r2_lasso
+```
+```{r}
+# Mean Absolute Error (train) for the regression tree with train data
+mae_lasso_train = mean(abs(train$PSA.level - y_pred_lasso))
+mae_lasso_train
+```
+```{r}
+# Mean Absolute Error (train) for the regression tree with train data
+mae_lasso_test = mean(abs(test$PSA.level - y_pred_lasso_test))
+mae_lasso_test
+```
+
+Answer: With the LASSO method, the increases of RMSE and MSA are very similar to the reduced regression model, due to the variance increase. However, R-squared dropped slightly despite this, from 0.4252919 to 0.3952574. Typically a small drop like this wouldn't be enough to show an overfitting or instability, but given the circumstances, it can now be interpreted thusly. Once again this overfitting was anticipated due to LASSO not being a very good fit to address the issues with the reduced linear model. 
+
+
+
+
+
+i-) Based on the performances on the test data set, which model would you choose? (10pts)
+
+Answer: All models have their issues and the increase in variance in the test data makes it difficult to evaluate. Given our current crop of models, instability is usually a larger issue for practicality and generalization that heteroskedacity and large tails. For that reason, I would have to lean towards our reduced model. However, due to the larger issues in our model, I would suggest repartitioning the data, retraining, and reevaluating the models. While this should not be done repeatedly, and its not impossible that our models would at some point be exposed to data with a higher variance, the important factor is that this created an artificial issue that makes the models almost certainly trained on less variance than they would encouter otherwise, but even more importantly, just makes the data difficult to evaluate. Correcting the situation so that the models can be evaluated shouldn't bias the models going forward. However, the best case scenario would be to have caught the variance issue before testing on the test data. This should be done going forward. Also before testing on the test data, I would have liked to have attempted to transform the data to correct for some of the issues with heteroskedacity. It shouldn't be tainting to do it if the issue persists after retraining since it isn't the reason we are retraining and the decision doesn't source from something in the test data. 
+

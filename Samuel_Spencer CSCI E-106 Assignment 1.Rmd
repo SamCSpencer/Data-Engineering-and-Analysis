@@ -1,0 +1,337 @@
+---
+title: 'CSCI E-106:Assignment 1'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Due Date: September 12, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+Samuel C Spencer
+
+## Problem 1
+
+The dataset teengamb concerns a study of teenage gambling in Britain. You can download this data set by installing faraway library. To get the data set, copy and paste the r command: install.packages("faraway");library(faraway); data(teengamb, package="faraway"). (40 points)
+
+```{r}
+install.packages("faraway");library(faraway); data(teengamb, package="faraway")
+```
+
+The list variables are described below:
+
+sex:0=male, 1=female
+
+status: Socioeconomic status score based on parents' occupation
+
+income: in pounds per week
+
+verbal: verbal score in words out of 12 correctly defined
+
+gamble: expenditure on gambling in pounds per year
+
+a-) We are interested in predicting the expenditure on gambling. What is the depdent variable? and What are the independent variables? (10 points)
+
+gamble is the dependent variable and sex, status, income, and verbal are the independent variables, as we are seeing if we can create a model using the latter group of variables to predict gamble. I.E. we are seeing if changes in the independent variable correspond with a correlated or causal change in gamble that can be used to make infrences and predictions. 
+
+b-) Make a numerical and graphical summary of the data, commenting on any features that you find interesting. Limit the output you present to a quantity that a busy reader would find sufficient to get a basic understanding of the data. (30 points)
+```{r}
+# Making sex a factor with labels so the labels can be used later within charts
+teengamb$sex = factor(teengamb$sex, 
+                      levels = c(0,1), 
+                      labels = c("Male", "Female"))
+
+cols = c("blue", "red")[teengamb$sex]
+
+# Loading in the data from teengamb data frame to make it active
+data(teengamb)
+
+# Displaying the first five rows of the data frame
+head(teengamb)
+
+# Displaying the structure of the data frame like data type and number of observations
+str(teengamb)
+
+# Printing basic statistical markers for the values in each column such as the 
+# quartiles, extreme values, and the mean
+summary(teengamb)
+
+# Displaying the correlations (Pearson r) between every possible pair of 
+# variables.
+cor(teengamb[, sapply(teengamb, is.numeric)])
+
+cat("Correlation between income and gambling for just Females (sex == 1)")
+cor(subset(teengamb, sex == "0")$income,
+    subset(teengamb, sex == "0")$gamble)
+
+cat("Correlation between income and gambling for just Males (sex == 0)")
+cor(subset(teengamb, sex == "1")$income,
+    subset(teengamb, sex == "1")$gamble)
+
+# Creating a series of graphs of the relation ship between every pair of
+# variables to check for visual signs of correlation and co-variance
+pairs(teengamb)
+
+# Creating a boxplot to compare distribution of gambling expenses in
+# females to the distribution in gambling expenses in men
+boxplot(gamble ~ sex, data=teengamb,
+        xlab="Sex (0=Female, 1=Male)", ylab="Gambling Expenditure")
+
+# Creating a histogram to compare the number of teens in each income level
+# (Dividing them into 8 inocome levels)
+hist(teengamb$income, main="Distribution of Weekly Income",
+     xlab="Income in Pounds Per Week",
+     col = "darkblue", border = "black")
+
+# Creating a dot plot comparing weekly income relative to gambling expense
+# for all teens, then color coding the dots by gender.
+plot(teengamb$income, teengamb$gamble,
+     col = cols,
+     pch = 19,
+     main = "Income vs Gambling Expenditure",
+     xlab = "Weekly Income",
+     ylab = "Annual Gambling Expenditure"
+     )
+
+legend("topleft", legend = c("Male", "Female"),
+       col = c("blue", "red"), pch = 19)
+
+# Creating a dot plot comparing verbal scores relative to gambling expense
+# for all teens, then color coding the dots by gender
+plot(teengamb$verbal, teengamb$gamble,
+     col = cols,
+     pch = 19,
+     main = "Verbal Score vs Gambling Expenditure",
+     xlab = "Number of Words out of 12 Correctly Defined",
+     ylab = "Annual Gambling Expenditure"
+     )
+
+legend("topleft", legend = c("Male", "Female"),
+       col = c("blue", "red"), pch = 19)
+```
+```{r}
+install.packages("ggplot2")
+library(ggplot2)
+
+# Creating a dot plot comparing socioeconomic backgroundrelative to gambling 
+# expense for all teens, then color coding the dots with a gradient to reflect 
+# verbal scores
+ggplot(teengamb, aes(x = status, y = gamble, color = verbal)) + 
+  geom_point(size = 3) + 
+  labs(x = "Socioeconomic Status (Parents' Occupation Score)",
+       y = "Annual Gambling Expenditure in Pounds",
+       color = "Verbal Score",
+       title = "Gambling vs Socioeconomic Status with Verbial Ability Gradient") +
+  scale_color_gradient(low = "lightblue", high = "darkblue") + theme_minimal()
+```
+The data shows a number of interesting features. The most prominent is that the the teenage boys studied appear to gamble more than the girls. Within that a few other trends seem to emerge. While it appears that a higher weekly income correlates with a higher rate of gambling, it seems that trend only appears to hold with boys, and no such correlation exists with girls. It appears there is a slight negative correlation between verbal scores and gambling but hard to say by eye. Similarly by with socioeconomic status. While kids from families from a poorer socioeconomic background seem to have higher outliers of extreme gambling, there are also more with a very low level of gambling. Teens from a wealthier economic background seem to be more consistent at a low to moderate amount of gambling. The pearson R values for all fields except for income do not indicate any significant relationships from a preliminary evaluation. Weekly income is the only independent variable showing a correlation with income greater than absolute value of .5. R values for when just gender seem to back up what seemed apparent in the graph. Income vs gambling has an R value of close to 0 with females but above 7 for males, indicating a potential moderate correlation between income and gambling existing just for the male students. Small sample size without a very strong correlation means there likely wouldn't be a small enough p-value to claim statistical significance with either however. 
+
+
+
+## Problem 2 
+
+The dataset uswages is drawn as a sample from the Current Population Survey in 1988. You can download this data set by installing faraway library. To get the data set, copy and paste the r command: install.packages("faraway"); data(uswages, package="faraway"). (60 points, 10 points each)
+
+```{r}
+install.packages("faraway"); data(uswages, package="faraway")
+```
+
+The wage is the response variable. Please see below for the full list of variables.
+
+
+wage: Real weekly wages in dollars (deflated by personal consumption expenditures - 1992 base year)
+
+educ:Years of education
+
+exper:Years of experience
+
+race:1 if Black, 0 if White (other races not in sample)
+
+smsa:1 if living in Standard Metropolitan Statistical Area, 0 if not
+
+ne:1 if living in the North East
+
+mw:1 if living in the Midwest
+
+we:1 if living in the West
+
+so:1 if living in the South
+
+pt:1 if working part time, 0 if not
+
+
+a-) How many observations are in the data set?
+
+```{r}
+nrow(uswages)
+```
+There are two-tousand observations
+
+b-) Calculate the mean and median of each variable. Are there any outliers in the data set? 
+
+```{r}
+summary(uswages)
+```
+
+```{r}
+data(uswages)
+
+# Creating a function to take a column of a dataframe, find outliers of that 
+# Column and save those entries into a new column to be easily reviewed and 
+# analyzed.
+outlier_summary = function(data, column_name) {
+  
+  # Taking the fields from the column desired column and dataframe and storing 
+  # them in a vector.
+  x = data[[column_name]]
+  
+  # Defining the locations and values of the boundries first and third 
+  # quartiles based on the entries in x. 
+  Q1 = as.numeric(quantile(x, 0.25))
+  Q3 = as.numeric(quantile(x, 0.75))
+  
+  # Saving the explicit interquartile range for x
+  IQR_value = IQR(x)
+  
+  # Setting a fence for values more than 1.5 interquartile ranges outside
+  # outside of the inter quartile range to determine if a number is a 
+  # an outlier and if it is high outlier or a low outlier.
+  lower_fence = Q1 - 1.5 * IQR_value
+  upper_fence = Q3 + 1.5 * IQR_value
+
+  # Filtering each field through the fences and saving them to a new data frame
+  outlier_df = data.frame(
+    type = ifelse(x < lower_fence, "Lower",
+                 ifelse(x > upper_fence, "Upper", "None"))
+  )
+  
+  # Adding the values of x back into the dataframe with the column name 
+  # indicated in the function call
+  outlier_df = cbind(setNames(data.frame(x), column_name), outlier_df)
+  
+  # Removing all rows data from the data frame that aren't outliers. 
+  outlier_df = outlier_df[outlier_df$type != "None", ]
+  return(outlier_df)
+}
+
+
+wage_outliers_df = outlier_summary(uswages, "wage")
+head(wage_outliers_df)
+
+```
+```{r}
+nrow(wage_outliers_df)
+```
+```{r}
+(7771 - 608)/300
+```
+
+```{r}
+# Creating a dataframe to collect outliers in the education column
+educ_outliers_df = outlier_summary(uswages, "educ")
+head(educ_outliers_df)
+nrow(educ_outliers_df)
+```
+
+
+```{r}
+# Creating a dataframe to detect the outliers for the experience column
+exper_outliers_df = outlier_summary(uswages, "exper")
+head(exper_outliers_df)
+nrow(exper_outliers_df)
+```
+```{r}
+(27-8)*1.5+27
+```
+
+
+The means and medians are in the above table. Wage, educ, and exper, are the only columns that have outliers (I suppose categorical data can have outliers but its unlikely). Wage has 71 outliers, all of them laying in the fourth quartile. Many of them are extreme outliers with the largest more than 23 inter-quartile ranges beyond the Q3 upper boundry. Experience also has only upper outliers, however there are only 7 of them, and they are all barely make the cut to be considered outliers. The IQR is 19 and outlier line is 55.5 and the max value is 59. The lowest value is -2 which doesn't seem possible. Either there is some logic I am missing or the data may be in need of clensing. Conversely with education all 40 of the outliers are in the first quartile. The interquartile range goes from 12 to 16 years of education. The limits of the interquartile range seems to represent people high school and bachelor, which one would imagine there is a lot of clustering around. It is slightly surprising that the maximum number of years of education is only 18. Also somewhat surprising is 0 years being the minimum strict laws around minimum levels of schooling for children. 
+
+c-) Calculate the correlation among wage,education and experience. Plot each of the predictors against the response variable. Identify the variables that are strongly correlated with the response variable.
+
+```{r}
+# Finding correlation between education, experience, and wages
+cor(uswages[, c("educ", "exper", "wage")])
+```
+
+```{r}
+# Creating a dot plot to compare weekly wages to years of education for all
+# people
+plot(uswages$educ, uswages$wage,
+     main = "Wages vs Education",
+     xlab = "Years of Education",
+     ylab = "Weekly Real Wages"
+     )
+```
+```{r}
+# Creating a dot plot to compare weekly wages to years of experience for all
+# people
+plot(uswages$exper, uswages$wage,
+     main = "Wages vs Experience",
+     xlab = "Years of Experience",
+     ylab = "Weekly Real Wages"
+     )
+```
+Neither years of education or years of experience are strongly correlated with weekly real wages. Looking at the graph for Wages vs Education it seems like there should be some more significant correlation than .25, however I suppose that there are so many people making minimum wage at every age that any correlation in people making slightly higher wages having their wages increase with years of education is mostly drowned out, and since all the dots for minimum wage earners are in the same 18 places then it just isn't obvious on the graphs how many data points are located there. For years experience, with some thought it makes sense that there is no correlation between experience and wages. It appears that people have an increase in income as they gain experience. However, people in high income jobs are more likely to retire early and therefore and exit out of th work force. So the majority of the people that have more than 45ish years of experience are people that likely still need to work as they haven't earned enough to secure their retirement. This is more likely to happen with people who have only worked lower waged jobs their whole lives. Additionally, people who enter the workforce earlier are likely to have more years of experience when their are reaching average retirement age, but they are also likely to have less education and have a lower waged job. This prevents a linear relationship from forming.
+
+d-) Is there difference in wages based on race?
+
+```{r}
+# Creating a boxplot to examine the difference in distribution of wages for 
+# black people and white people 
+boxplot(wage ~ race, data=uswages,
+        xlab="Race(0=White, 1=Black)", ylab="Real Weekly Wages")
+
+```
+```{r}
+# Preforming a t-Test to check for statistical significance between race as
+# the independent variable and wages as the dependent variable
+t.test(wage ~ race, data = uswages)
+
+# Wage summary for White People
+cat("White wage statistics\n")
+summary(uswages$wage[uswages$race == 0])
+
+# Wage summary for Black People
+cat("Black wage statistics\n")
+summary(uswages$wage[uswages$race == 1])
+
+```
+
+With a vanishingly small p-value of 4.096e-09, this is well bellow the .05 threshold to reject the null hypothesis. Therefore, we are left with the alternate hypothesis that there is a difference between the average real weekly wages of white and black people. Every major marker for white people was higher than for black people with also many more outliers for white people.
+
+e-) Build a regression model by using only education to predict the response variable. State the regression model.
+
+```{r}
+# Creating linear regression model with education as independent variable and
+# wages as the dependent variable
+model = lm(wage ~ educ, data = uswages)
+summary(model)
+```
+The regression model for education vs wages is $\hat{wage} = 109.754 + 38.011*educ$
+
+The p-value is close to 0, this shows that the results are statistically significant and that education has a positive effect on wages. However the low adjusted R^2 of .06167 shows that education only determines about 6.2% of variation in wages. The large F-statistic with a near 0 p-value also support this. This means that education almost certainly explains some change in wages in part, but that other factors are likely also important.
+
+f-) Build a regression model by using only experience to predict the response variable. State the regression model.
+
+```{r}
+# Creating linear regression model with experience as independent variable and
+# wages as the dependent variable
+model_exper = lm(wage ~ exper, data = uswages)
+summary(model_exper)
+```
+
+The regression model for education vs wages is: $\hat{wage} = 492.1669 + 6.2981*exper$
+
+Once again a p-value of p-value is close to 0, this shows that the results are statistically significant we reject the null hypothesis and accept the alternative hypothesis that years of experience has a positive effect on real weekly wages. The large F statistic with a low p-value once again reinforces that it is likely that variation in wages is explained by experience. However, even less of the variance is explained by experience. Our low R^2 shows that only about 3.3% of variation in wages is explained by years of experience, meaning there are still likely other important factors. The large residual standard error relative to a slope of 6.3 also implies that most of the variability is not explained by experience. 

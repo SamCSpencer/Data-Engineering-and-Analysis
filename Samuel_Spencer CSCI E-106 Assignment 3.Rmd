@@ -1,0 +1,589 @@
+---
+title: 'CSCI E-106:Assignment 3'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Due Date: September 26, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+Samuel Spencer
+
+```{r}
+install.packages('lmtest')
+```
+
+## Problem 1
+
+Refer to the Grade point average Data. The director of admissions of a small college selected 120 students at random from the new freshman class in a study to determine whether a student’s grade point average (GPA) at the end of the freshman year (Y) can be predicted from the ACT test score (X). (10 points)
+
+```{r}
+df_gpa = read.csv('Grade Point Average Data.csv')
+```
+
+```{r}
+# Preliminary data exploration
+summary(df_gpa)
+
+head(df_gpa)
+
+#Plotting charts in pairs of two
+par(mfrow=c(1,2))
+
+str(df_gpa)
+
+# Histograms of distributions
+hist(df_gpa$Y, main='Distribution of GPA',
+     xlab='GPA',
+     col = 'darkblue', border = 'black')
+
+hist(df_gpa$X, main='Distribution of ACT Scores',
+     xlab='ACT Scores',
+     col = 'darkblue', border = 'Black')
+
+# Plotting in rows of 1
+par(mfrow=c(1,1))
+
+# Box plot of x vs y
+boxplot(Y ~ X, data=df_gpa, main = 'Distribution of GPA by ACT Scores',
+        xlab='ACT Scores', ylab='GPA')
+
+# Point plot x vs y
+plot(df_gpa$X, df_gpa$Y,
+     main = 'ACT Scores vs Freshman GPA',
+     xlab = 'ACT Scores',
+     ylab = 'GPA'
+     )
+
+# Box plot of just x (ACT)
+boxplot(df_gpa$X, horizontal = TRUE,
+        col = 'lightblue',
+        xlab ='Distribution of ACT Scores')
+text(x=fivenum(df_gpa$X), 
+     labels=fivenum(df_gpa$X), 
+     y=1.25) 
+text(x=fivenum(df_gpa$X),
+                  labels =c('Min','Q1','Q2','Q3','Max'),
+                  y=0.75)
+
+# Box plot of just y (GPA) rounding numbers to two decimals 
+# places for visibility
+
+# Storing fivenum values separately so full values can be used for
+# proper location and truncated can be used for labels
+five = fivenum(df_gpa$Y)
+five_round = round(five, 2)
+boxplot(df_gpa$Y, horizontal = TRUE,
+        col = 'pink',
+        xlab ='Distribution of Freshman Year GPAs')
+text(x=five, 
+     labels=five_round, 
+     y=1.25) 
+text(x=five,
+     labels =c('Min','Q1','Q2','Q3','Max'),
+     y=0.75)
+```
+```{r}
+install.packages('car')
+install.packages('olsrr')
+library(car)
+library(olsrr)
+```
+
+
+a-) Build a regression model.  Write down the stand error of the slope and intercept. Plot regression line. Comment on the model performance.(5 points)
+
+```{r}
+# Performing initial linear progression
+model_gpa = lm(Y ~ X, data = df_gpa)
+print(summary(model_gpa))
+
+# Plotting data with best fit line
+plot(df_gpa$X, df_gpa$Y,
+     main = 'ACT Scores vs Freshman GPA with Best Fit Line',
+     xlab = 'ACT',
+     ylab = 'GPA'
+     )
+abline(model_gpa)
+```
+```{r}
+ols_test_breusch_pagan(model_gpa)
+plot(model_gpa)
+qchisq(.95, df=1)
+```
+```{r}
+# Plotting histogram of residuals
+res = residuals(model_gpa)
+
+hist(res,
+     breaks = 15,
+     col = 'lightblue',
+     main = 'Histogram of Residuals',
+     xlab = 'Residuals',
+     ylab = 'Frequency',
+     freq = TRUE)
+
+# Adding a normal curve over top for comparison
+xfit = seq(min(res), max(res), length=100)
+yfit = dnorm(xfit, mean=mean(res), sd=sd(res))
+yfit = yfit * length(res) * diff(hist(res, 
+                                    breaks = 15, 
+                                    plot=FALSE)$breaks[1:2])
+lines(xfit, yfit, col='red', lwd=2)
+```
+Answer: The regression model for ACT vs GPA is: $\hat{GPA} = 2.11405 + 0.03883*ACT$
+
+The standard area for the slope and intercept are .01277 and .32089 respectively.
+
+The model's overall performance is decent but lacking in several areas. The low p-value and the large F-statistic indicate that the model is explaining variance in the dependent variable, but the low R-squared indicate that it is only explaining about 7% of the variance. The histogram of the residuals and the q-q plot both indicate that the residuals are close to normal but are left skewed. Having both ends of the q-q plot fall below indicates that the right tail is tighter but the left tail is heavier than expected for normal distribution, but the middle seems to follow a normal distribution quite well. 
+
+Looking at the residuals vs fitted plot, there is a slight bowing pattern to the residuals, though the loess smooth follows the reference line pretty well. When taking into account the S-L plot, it's clear that we are seeing a pattern indicating non-linearity and not just random noise. There is likely a missing variable or a transform of the data that could be done to make the model fit better. 
+
+After performing a Brown-Forsythe Test we get a Chi-squared of 0.639. A chi-squared of 3.842 would be the minimum value with one degree of freedom according to our chi-squared table to suprass the critical value of $\alpha=.05$. Clearly our Chi-squared does not surpass that value and our p-value for the test is 0.4239 which is greater than .05 so we fail to reject the null hypothesis that the variance is constant. Our S-L plot backs this up. There is no obvious funnel shape indicating homoskedasticity, meaning or model is as predictive of the variance in the dependent variable for smaller values of our independent variable as it is for larger values of our independent variable.
+
+So on the whole the model doesn't have any major issues, and does explain variance of the dependent variable, but the relationship is likely non-linear and so the addition of another variable or applying a transformation to the data could improve it.
+
+
+b-) Are the slope and intercept statistically significant?  Write down your null and alternative hypothesis and p value of the test. (3 points)
+
+Answer: The null hypothesis for the slope is that the true value for linear relationship between the dependent and independent variable has a slope of 0, indicating a lack of a linear relationship.
+
+The alternative hypothesis for the slope is that the true value for the slope is not 0, indicating a linear relationship.
+
+The null hypothesis for the intercept is similar where it suggests the true value for the intercept is 0, indicating that when the independent variable is 0 so is the dependent variable.
+
+the alternative hypothesis for the intercept is that also that the true value for the intercept is not 0, indicating that when the independent variable is 0 then the dependent variable is not 0.
+
+p-values of .002917 and close to zero for slope and intercept respectively are both below the threshold of .05, which is statistically significant and causes us to reject the null hypothesis for both and support the alternative hypothesis that both the slope and the intercept are not equal to zero, indicating a linear relationship between the independent and dependent variables where when the independent variable is 0, the dependent variable is not 0. 
+
+
+
+c-) What is the error variance of the  regression line? (2 points)
+
+RSE = .6231. $RSE^2 = .6231^2 = 0.3882 = MSE$, given the scale of our data, its quite large which matching with our R-squared indicating that our model is not particularly precise.
+
+
+
+
+## Problem 2 
+
+Refer to the Crime rate data. A criminologist studying the relationship between level of education-and crime rate in medium-sized U.S. counties collected the following data for a random sample of 84 counties; X is the percentage of individuals in the county having at least a high-school diploma, and Y is the crime rate (crimes reported per 100,000 residents) last year. (90 points)
+
+```{r}
+df_crime = read.csv('Crime Rate.csv')
+```
+```{r}
+# Exploring data 
+summary(df_crime)
+
+head(df_crime)
+
+str(df_crime)
+
+#Plotting charts in pairs of two
+par(mfrow=c(1,2))
+
+hist(df_crime$X, main='Distribution of Percent Educated',
+     xlab='Percent Receiving High School Diploma',
+     col = 'darkblue', border = 'black')
+
+hist(df_crime$Y, main='Distribution of Crime Rates',
+     xlab='Reported Crimes Per 100,000 Residents',
+     col = 'darkblue', border = 'black')
+
+# Adjusting margins to allow for a shared title for second pair
+par(mfrow=c(1,2), oma=c(0,0,3,0))
+
+boxplot(Y ~ X, data=df_crime,
+        col = 'lightblue',
+        xlab ='Percent Receiving High School Diploma', ylab='Crime Rate per 100,000 pop.')
+
+plot(df_crime$X, df_crime$Y,
+     xlab = 'Percent Receiving High School Diploma',
+     ylab = 'Crime Rate per 100,000 pop.'
+     )
+
+# Inserting shared title
+mtext('Distribution of Crime Rates by Percent Educated', outer=TRUE, line=1, cex=1.5)
+```
+
+
+a-) Create train and test data sets: select a random sample of 70% observations from the data set for the train data set and remaining cases for the test data set. (use set.seed(1023) before selecting the sample. (5 points) 
+
+```{r}
+boxplot(df_crime$X, horizontal = TRUE,
+        col = 'lightblue',
+        xlab ='Distribution of Percent Graduated from High School')
+text(x=fivenum(df_crime$X), 
+     labels=fivenum(df_crime$X), 
+     y=1.25) 
+text(x=fivenum(df_crime$X),
+                  labels =c('Min','Q1','Q2','Q3','Max'),
+                  y=0.75)
+
+boxplot(df_crime$Y, horizontal = TRUE,
+        col = 'pink',
+        xlab ='Distribution of Crime Rates per 100,000 pop')
+text(x=fivenum(df_crime$Y), 
+     labels=fivenum(df_crime$Y), 
+     y=1.25) 
+text(x=fivenum(df_crime$Y),
+                  labels =c('Min','Q1','Q2','Q3','Max'),
+                  y=0.75)
+```
+```{r}
+install.packages('caret')
+```
+
+```{r}
+# Splitting the observations in our crime data frame into two groups
+# 70% for training the model and 30% reserved to test against the 
+# model.
+library(caret)
+
+# Selecting the seed to reference for reproducability when splitting
+# the data
+set.seed(1023)
+# splitting the data
+crime_split = createDataPartition(y = df_crime$Y, p = .7, list = FALSE)
+
+train = df_crime[crime_split,]
+test = df_crime[-crime_split,]
+
+
+```
+
+```{r}
+str(train)
+str(test)
+head(train)
+head(test)
+```
+```{r}
+84*.3
+```
+
+
+
+
+### Use train data to answer questions below
+
+b-) Obtain the estimated regression function. Plot the estimated regression function and the data. Does the linear regression function appear to give a good fit here? Discuss. (5 points) 
+
+```{r}
+# Training linear model using training data
+lm_crime = train(Y~., data = train, method = 'lm')
+summary(lm_crime)
+```
+```{r}
+# Plotting data with best fit line
+plot(train$X, train$Y,
+     main = 'Distribution of Crime Rates by Percent Educated by County',
+     xlab = 'Percent Graduate High School',
+     ylab = 'Crime Rate per 100,000 pop'
+     )
+abline(lm_crime$finalModel)
+```
+```{r}
+ols_test_breusch_pagan(lm_crime$finalModel)
+plot(lm_crime$finalModel)
+qchisq(.95, df=1)
+```
+```{r}
+# Plotting histogram of residuals
+res_crime = residuals(lm_crime$finalModel)
+
+hist(res_crime,
+     breaks = 15,
+     col = 'lightblue',
+     main = 'Histogram of Residuals',
+     xlab = 'Residuals',
+     ylab = 'Frequency',
+     freq = TRUE)
+
+# Adding a normal curve over top for comparison
+xfit_c = seq(min(res_crime), max(res_crime), length=100)
+yfit_c = dnorm(xfit_c, mean=mean(res_crime), sd=sd(res_crime))
+yfit_c = yfit_c * length(res_crime) * diff(hist(res_crime, 
+                                    breaks = 15, 
+                                    plot=FALSE)$breaks[1:2])
+lines(xfit_c, yfit_c, col='red', lwd=2)
+```
+
+
+Answer: The regression model for High School Graduation Percentage vs Crime Rate per 100,000 population is: $\hat{crime\ rate} = 17759.96 + -135.75*percent\ graduated$
+
+The regression model seems to somewhat decently fit the data. It only explains about 11% of the variance. The F-statistic is not small enough to draw a conclusion, but given the scale of the data, it doesn't indicate very high precision. 
+
+
+
+
+
+c-) Test whether or not there is a linear association between crime rate and percentage of high school graduates, using a t test with $\alpha =0.01$. State the alternatives, decision rule, and conclusion. What is the P-value of the test? (5 points) 
+
+Answer: The null hypothesis for the slope is that the true value for linear relationship between the dependent and independent variable has a slope of 0, indicating a lack of a linear relationship.
+
+The alternative hypothesis for the slope is that the true value for the slope is not 0, indicating a linear relationship.
+
+If the p-value of the coefficient($graduation\ rate$) is less than the critical value of $\alpha = .01$ (a slightly stricter threshold), the null hypothesis is rejected and it supports the alternative hypothesis. 
+
+Our p-value is $0.011 > .01 = \alpha$ so we (barely) fail to reject the null hypothesis that the slope of the relationship between the dependent and independent variable is 0 and that there is not a linear relationship. 
+
+
+
+
+d-) Estimate $\beta_{1}$, with a 99 percent confidence interval. Interpret your interval estimate. (5 points) 
+
+```{r}
+# Getting summary of the linear model with just the values pertaining to 
+# the coefficient
+summary(lm_crime$finalModel)$coefficients['X', ]
+
+# Printing the 99% confidence interval for the indepedent variable, high
+# school graduation percentage
+confint(lm_crime$finalModel, 'X', level = 0.99)
+```
+
+Answer: Our 99% confidence interval (0.5%-99.5%) ranges from -273.4 to 1.9 (crimes per hundred thousand population per percent).
+
+We are 99% confident that a one-percentile increase in the percentage of the adult population that has graduated high school is associated with a change in crime rate of between -273.4 and 1.9 crimes per 100,000 residents, on average, holding other predictors constant. 
+
+This interval contains the value 0, signifying that we cannot be certain to the 99% confidence level that that an increase in the percentage of the adult population of a county that has graduated from high school has any associated change of the crime rate of a county.
+
+
+
+
+e-) Set up the ANOVA table. (5 points) 
+
+```{r}
+anova(lm_crime$finalModel)
+```
+
+
+f-) Carry out the test in part c by means of the F test. Show the numerical equivalence of the two test statistics and decision rules. Is the P-value for the F test the same as that for the t test? (5 points) 
+
+```{r}
+# Critical value for the t-statistic
+qt(1 - 0.01/2, df = 58)
+
+# Critical value for the F-statistic
+qf(1 - 0.01, df1 = 1, df2 = 58)
+
+# Critical value for the t-statistic squared, should be the same as the
+# critical value for the F-statistic
+(qt(1 - 0.01/2, df = 58))^2
+```
+
+Answer: $F = \frac{\frac{SS_{graduation\ percentage}}{df_{graduation\ percentage}}}{\frac{SS_{Residual}}{df_{Residual}}} =  \frac{MS_{graduation\ percentage}}{MS_{Residual}} = \frac{\frac{42196578}{1}}{\frac{354834370}{58}} = \frac{42196578}{6117834} = 6.8973 = F\ value$
+
+$F = t^2$
+
+$t = \sqrt{F} = \sqrt{6.8973} = 2.6263$
+
+Since we only have one coefficient, this is the t-statistic for both the coefficient and the model as a whole. As shown in the summary and ANOVA table, both the F-statistic and the t-statistic of the coefficient have the same p-value. Using the t-table, and F-table we can find the critical values for a two tail t-test with 58 degrees ($t_{1-.01/2,58}$) of freedom and an F-test with 1 model degree of freedom and 58 residual degrees of freedom ($F_{1,58,1-.01}$). 
+
+These values are $t_{1-.01/2,58} = 2.663$ and $F_{1,58,1-.01} = 7.093097$
+
+The relation between these two values is clear by taking the square of the critical t-value: $t_{1-.01/2,58}^2 = 2.663^2 = 7.0931 = F_{1,58,1-.01}$
+
+Our decision rules are that if the absolute value of observed F-statistic is greater than the critical F-statistic then we reject the null hypothesis, that there is not a linear association between the percent of high school graduates and crime rate. If it is less than or equal then we fail to reject the null hypothesis. Since one value is the square of the other this is the equivalent of checking by the t-statistic where if the observed absolute value of the t-statistic is greater than the critical t-statistic then we reject the null hypothesis.
+
+Alternatively we can find the p-value of either statistic and compare it to the critical value, $\alpha = .01$, directly. Both should return the same p-value. If that p-value is less than $\alpha$ then we reject the null hypothesis.
+
+```{r}
+# Getting p-value from observed t-statistic
+p_value_t = 2 * (1 - pt(abs(2.6263), 58))
+p_value_t
+```
+```{r}
+p_value_F = 1 - pf(6.8973, 1, 58)
+p_value_F
+```
+
+Both p-values are 0.01102, which was reflected in the ANOVA table and in the summary for the p-value for the coefficient.
+
+$|F_{obv}| = |6.8973| \leq 7.0931 = F_{1,58,1-.01}$
+
+$|t_{obb}| = |2.6263| \leq  2.663 = t_{1-.01/2,58}$
+
+$p-value = 0.01102 \geq 0.01=\alpha$
+
+So all three metrics are consistent. We fail to reject the null hypothesis that there is not a linear association between the percent of high school graduates and crime rate.
+
+
+
+
+
+g-) By how much is the total variation in crime rate reduced when percentage of high school graduates is introduced into the analysis? Is this a relatively large or small reduction? (5 points) 
+
+Answer: The total variation is the total sum of squares (SST) which is reduced to the sum of squared residuals (SSE). The amount that it is reduced can be found by taking the difference between the two values which is also the regression sum of squares (SSR)
+
+```{r}
+354834370 + 42196578
+```
+```{r}
+42196578/397030948
+```
+
+$SST = SSE + SSR = 354,834,370 + 42,196,578 = 397,030,948$ 
+
+$SSR = 42,196,578$
+
+The total variance was 397,030,948 and it was reduced by 42,196,578 to 354,834,370.
+
+Proportionally it was reduced by $\frac{SSR}{SST} = \frac{42,196,578}{397,030,948} = 0.1063$. This is the R-squared value.
+
+This is on the low side, but given the 58 degrees of freedom, we know from our F-statistic calculation that per degree of freedom our model explains about 6 times more variance than is left unexplained, so in that regard it could explain quite a bit of a lower amount of variation before we would say that the amount of variation it explains is that which would be expected by chance.
+
+
+
+
+h-) State the full and reduced models.(5 points) 
+```{r}
+# Printing summary of full model
+summary(lm_crime$finalModel)
+```
+
+```{r}
+# Creating a linear model from the training data without any independent
+# variable
+lm_crime_reduced = lm(Y ~ 1, data = train)
+summary(lm_crime_reduced)
+```
+Answer: The full model is $\hat{crime\ rate} = 17759.96 + -135.75*percent\ graduated + \epsilon_i$
+
+The reduced $\hat{crime\ rate} = 7085.8 + \epsilon_i$
+
+
+
+
+i-) Obtain (1) SSE(F), (2) SSE(R), (3) dfF. (4) dfR, (5) test statistic $F_{*}$ for the general linear test, (6) decision rule. (5 points) 
+
+```{r}
+anova(lm_crime$finalModel)
+
+anova(lm_crime_reduced)
+```
+
+Answer:
+1. SSE(F) = 354834370
+2. SSE(R) = 397030948
+3. df(F) = 58
+4. df(R) = 59
+```{r}
+((397030948-354834370)/(59-58))/(354834370/58)
+397030948-354834370
+354834370/58
+```
+5. $F_{*} = \frac{\frac{SSE(R)-SSE(F)}{df(R)-df(F)}}{\frac{SSE(F)}{df(F)}} = \frac{\frac{397030948-354834370}{59-58}}{\frac{354834370}{58}} = \frac{42196578}{6117834} = 6.897307$
+
+```{r}
+F_crit = qf(1 - .01, df1 = 1, df2 = 58)
+F_crit
+```
+
+6. $F_{*} = 6.897307 \leq 7.0931. = F_{1,58,1-.01}$, so we fail reject the null hypothesis that the variable has a slope of variable is not 0.
+
+
+
+
+j-)Are the test statistic F* and the decision rule for the general linear test numerically equivalent to those in part (c)? (5 points) 
+
+Answer: Yes both F* and the critical F-value are identical, and the decision rules are identical.
+
+k-) Check the regression model assumptions visually from graphs such as Error vs Predicted (Fitted) Graphs, and state your conclusions. (5 points)
+
+Answer: See graphs in Question 2.a.
+
+The histogram and q-q plot both raise some concerns. The q-q is a bit hard to parse. The middle is pretty normal but it seems to have an overall pattern of weak tails, particularly on the left with a slight right skew at the extremes. There is a hint of a pattern but it isn't super clear cut, as it seems to oscillate above and below the line with some randomness. I would say that it is enough to draw some doubt into the our t-test results, F-statistic, and standard errors, but not enough to dismiss them.
+
+Residuals vs Fitted and Scale-Location plots both look good. No real discernible patterns and both are relatively flat over the reference line. This implies that the model is best suited to a linear model and along with the p-value of the Brown-Forsythe p-value of 0.9647615 which is larger than the critical value of .05, leading us to fail to reject the null hypothesis that the variance is constant. This suggests that the data is homoskedastic and the model is as good at making predictions based on the lower values of the independent variable as it is with the higher values of the independent variable.
+
+
+
+
+l-) Are there any outliers in the data set? (5 points) 
+
+Answer: Yes there are 3 outliers, although according to the Residual vs Leverage plot (see Question 2.a.) they do not have a destabilizing influence on the model as all values are well within the Cook's Distance.
+
+
+
+
+m-) Conduct the Breusch-Pagan test to determine whether or not the error variance varies with the level of X. Use $\alpha=0.01$. State the alternatives. decision rule, and conclusion. Is your conclusion consistent with your preliminary findings in part (k)?(5 points)
+
+```{r}
+library(lmtest)
+bptest(lm_crime$finalModel)
+```
+
+Null hypothesis: variance is consistent across the model (homoskedasticity).
+
+Alternative hypothesis: variance is not consistent across the model (homoskedasticity).
+
+Our p-value of 0.9614 is larger than our critical value of .01, so we fail to reject the null hypothesis that variance is consistent across the model, meaning the data model is homoskedastic.
+
+
+
+
+
+n-) Use the Brown-Forsythe test to determine whether or not the error variance varies with the level of X. Divide the data into the two groups, by using the median value of X, and use $\alpha=0.01$. State the decision rule and conclusion. Does your conclusion support your preliminary findings
+in part (m and k)?(10 points)
+```{r}
+class(train$X)
+str(train$X)
+```
+
+
+```{r}
+# Ran out of time to add comments
+train$group = factor(ifelse(train$X <= median(train$X), 'lower', 'upper'))
+
+medians = tapply(train$Y, train$group, median)
+
+train$d = abs(train$Y - medians[train$group])
+
+d_bar = tapply(train$d, train$group, mean)
+
+d_bar_overall = mean(train$d)
+
+n_j = table(train$group)
+
+k = length(n_j)
+
+numerator = sum(n_j * (d_bar - d_bar_overall)^2) / (k-1)
+
+denominator = sum(tapply(train$d, train$group, function(x) sum((x-mean(x))^2))) / (nrow(train)-k)
+
+f_BF = numerator / denominator
+f_BF
+
+```
+```{r}
+p_value <- 1 - pf(f_BF, df1 = k - 1, df2 = nrow(train) - k)
+p_value
+```
+
+
+Answer: As stated in Question 2.k.:
+
+I got a differen't p-value here (0.6803057) than I did from running the built in test earlier, and I have ran out of time to trouble shoot. Both are large enough to reject the null hypothesis. 
+
+Residuals vs Fitted and Scale-Location plots both look good. No real discernible patterns and both are relatively flat over the reference line. This implies that the model is best suited to a linear model and along with the p-value of the Brown-Forsythe p-value of 0.9647615 which is larger than the critical value of .01, leading us to fail to reject the null hypothesis that the variance is constant. This suggests that the data is homoskedastic and the model is as good at making predictions based on the lower values of the independent variable as it is with the higher values of the independent variable.
+
+
+
+### Use test data to answer question below
+ 
+q-) Is there an evidence of over fitting? (15 points)
+

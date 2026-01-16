@@ -1,0 +1,721 @@
+---
+title: 'CSCI E-106:Assignment 4'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(faraway)
+library(caret)
+library(olsrr)
+library(MASS)
+data(ozone)
+
+```
+
+### Due Date: October 3, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+
+## Problem 1
+
+Refer to Sales growth Data. (30 points, 10 points each)
+
+```{r}
+df = read.csv('Sales Growth Data.csv')
+```
+```{r}
+summary(df)
+head(df)
+nrow(df)
+```
+```{r}
+str(df)
+hist(df$Y, main='',
+     xlab='Sales Growth',
+     col = 'darkblue', border = 'black')
+
+# Plotting in rows of 1
+plot(df$X, df$Y,
+     xlab = 'Year',
+     ylab = 'Sales growth')
+```
+
+
+a-) Divide the range of the predictor variable (coded years) into five bands of width 2.0, as follows: Band 1 ranges from X = -.5 to X = 1.5; band 2 ranges from X = 1.5 to X = 3.5; and so on. Determine the median value of X and the median value of Y in each band and develop the band smooth by connecting the five pairs of medians by straight lines on a scatter plot of the data. Does the band smooth suggest that the regression relation is linear? Discuss. 
+
+```{r}
+#check for missing and NAs
+apply(df ,2,function(x) sum(is.na(x))) 
+# Creating vector populated with the values of X mostly just so it will be 
+# the same length as our columns.
+ind = df$X
+# Dividing the 10 entries of X into bands of 2, so the first two years are
+# are grouped, and the next two, and so on
+for (i in 1:10){
+  # Looking at which band each year belongs to and then setting the ind value
+  # with the same index to the number of the band.
+  if (df$X[i] <= 1.5){ind[i] = 1} 
+  else if (df$X[i] <= 3.5){ind[i] = 2} 
+  else if (df$X[i] <= 5.5){ind[i] = 3} 
+  else if (df$X[i] <= 7.5){ind[i] = 4}
+  else {ind[i]=5}
+}
+
+# Making a new data frame that adds our band labels to the columns of df
+q2.dat = data.frame(df,ind)
+# Making another data frame of the medians (with a group of 2, its just the 
+# mean) of the values in the X and Y columns based on a shared value of the
+# ind column
+out = aggregate(q2.dat[,1:2], list(q2.dat[,3]), median)
+
+head(q2.dat)
+head(out)
+
+plot(out$X,out$Y, xlab = 'Coded Year', ylab = 'Sales Growth')
+# Plotting a line between each point.
+plot(out$X,out$Y,type="l", xlab = 'Coded Year', ylab = 'Sales Growth')
+```
+
+Answer: There does seem to be a relationship between sales growth and year. It could be linear but also hints at being exponential or a power relationship. This could be a local view that makes it seem to have some local linearity but if we collected more data allowing us to zoom out further then the curve could emerge more.
+
+
+
+
+
+b-) Create a series of seven overlapping neighborhoods of width 3.0 beginning at X = -.5. The first neighborhood will range from X = -.5 to X = 2.5; the second neighborhood will range from X = .5 to X = 3.5; and so on. For each of the seven overlapping neighborhoods, fit a linear regression function and obtain the fitted value $\hat{Y_{c}}$ at the center $X_{c}$ of the neighborhood. Develop a simplified version of the lowess smooth by connecting the seven ($X_c$, $\hat{Y_{c}}$) pairs by straight lines on a scatter plot of the data. 
+
+```{r}
+# Making a linear regression model of overlapping groups of three points, then
+# storing the three predicted values for each model.
+#1 X = -.5 to X = 2.5;
+f1 = lm(Y~X,data = df[df[,2]>=-0.5 & df[,2]<=2.5 ,])
+f1.pred = f1$fitted.values
+#2 X = .5 to X = 3.5;
+f2 = lm(Y~X,data = df[df[,2]>=.5 & df[,2]<=3.5 ,])
+f2.pred = f2$fitted.values
+#3 X = 1.5 to X = 4.5;
+f3 = lm(Y~X,data = df[df[,2]>=1.5 & df[,2]<=4.5 ,])
+f3.pred = f3$fitted.values
+#4 X = 2.5 to X = 5.5;
+f4 = lm(Y~X,data = df[df[,2]>=2.5 & df[,2]<=5.5 ,])
+f4.pred = f4$fitted.values
+#5 X = 3.5 to X = 6.5;
+f5 = lm(Y~X,data = df[df[,2]>=3.5 & df[,2]<=6.5 ,])
+f5.pred = f5$fitted.values
+#6 X = 4.5 to X = 7.5;
+f6 = lm(Y~X,data = df[df[,2]>=4.5 & df[,2]<=7.5 ,])
+f6.pred = f6$fitted.values
+#7 X = 5.5 to X = 8.5;
+f7 = lm(Y~X,data = df[df[,2]>=5.5 & df[,2]<=8.5 ,])
+f7.pred = f7$fitted.values
+
+# Creating a vector of the second/center predicted value of each linear
+# regression.
+Yhat=c(f1.pred[2],f2.pred[2],f3.pred[2],f4.pred[2],f5.pred[2],f6.pred[2],f7.pred[2])
+
+# Creating corresponding x-coordinates representing each neighborhood
+Xc=c(1:7)
+
+# Putting the x-coordinates together with the center y-hat values
+data.frame(Xc,Yhat)
+
+# Plotting the x-coordinates and the y-hat values using a line segments
+plot(Xc,Yhat,type="l", xlab = 'Year', ylab = 'Predicted Sales Growth (y-hat)')
+```
+
+Conclusion: Not much more is able to be concluded by this analysis. The relationship is still prevalent and it still hints at being exponential but some of the movement appears slightly more random so it still could just be linear. It's worth noting that this approach excludes the final data point and given the sample size of 10, that is a big proportion of the data. We can see by looking at the data frame that the major jump that gives the relationship the appearance of being exponential happens at point 9 (year 8) so both of our representations capture that currently. Perhaps adding back in year 9 would make it look more linear again.
+
+
+
+
+
+c-) Obtain the 95 percent confidence band for the true regression line and plot it on the plot prepared in part (b). Does the simplified lowess smooth fall entirely within the confidence band for the regression line? What does this tell you about the appropriateness of the linear regression function? 
+```{r}
+# Calculating the multiplier for our confidence band using the formula of 
+# sqrt(p * F) using the appropriate F-distribution based on our desired
+# confidence interval and degrees of freedom (2 and 8)
+W = sqrt( 2 * qf(0.95,2,8))
+
+# Creating a linear regression model for our entire data set
+f.sg = lm(Y~X,data=df)
+
+# Storing the value of the y-hats, their standard errors, the standard deviation
+# of the residuals and the degrees of freedom of the denominator
+pred = predict(f.sg,se.fit=TRUE)
+
+# Creating a matrix, out, by taking the predicted value of the model and adding
+# and subtracting the standard error multiplied by the multiplier for the 
+# confidence band to create the 95% confidence interval of each point.
+out = cbind(df$X,pred$fit-W*pred$se.fit,pred$fit + W*pred$se.fit )
+out[1:10,]
+
+# Plot the data
+plot(df$X, df$Y, main="Regression line with 95% confidence band")
+
+# Add regression line
+abline(f.sg, col="blue", lwd=2)
+
+# Add confidence band
+lines(out[,1], out[,2], col="red", lty=2)  # lower bound
+lines(out[,1], out[,3], col="red", lty=2)  # upper bound
+
+# If you have the simplified lowess/band-smooth from part (b)
+lines(Xc, Yhat, col="green", lwd=2)  # connects the representative points
+```
+```{r}
+install.packages("caret")
+pred
+
+```
+
+
+Answer: Nearly all the points lie within the 95% confidence interval (as would be expected with nearly any distribution) but more importantly the smoothed curve lies entirely within the confidence interval which hints very strongly at our model being a good fit. Additionally, all of the point-wise confidence intervals don't share a single value, or in other words, the upper bound of the lowest(first) interval is less than the lower bound of the highest(last) interval, so there is definitely less than 5% chance that the true value for all the points are the same and that the true slope is 0. Meaning that to an alpha of .05, we can reject the null hypothesis. A linear regression model feels approptiate. 
+
+
+
+
+
+
+## Problem 2
+
+Using the ozone data under faraway library,data(ozone,package="faraway"). Use O3 as the response and temp, humidity and ibh as predictors to answer the questions below. 
+(50 points)
+
+```{r}
+install.packages("faraway");library(faraway); data(ozone, package="faraway")
+```
+
+```{r}
+data(ozone)
+```
+
+```{r}
+# Preliminary data exploration
+summary(ozone)
+
+head(ozone)
+
+str(ozone)
+```
+```{r}
+
+cor(ozone[, sapply(ozone, is.numeric)])
+
+pairs(ozone)
+```
+```{r}
+
+```
+
+```{r}
+
+#Plotting charts in pairs of two
+par(mfrow=c(1,2))
+
+# Histograms of distributions
+hist(ozone$O3, main='Distribution of ozone',
+     xlab='O3',
+     col = 'darkblue', border = 'black')
+
+hist(ozone$temp, main='Distribution of Tempertures',
+     xlab='Tempertures',
+     col = 'darkblue', border = 'Black')
+
+# Plotting in rows of 1
+par(mfrow=c(1,1))
+
+# Box plot of x vs y
+boxplot(O3 ~ temp, data=ozone, main = 'Distribution of Ozone by Temp',
+        xlab='Temperture', ylab='ozone')
+
+# Point plot x vs y
+plot(ozone$temp, ozone$O3,
+     main = 'temp vs Ozone',
+     xlab = 'temp',
+     ylab = 'ozone'
+     )
+
+# Box plot of just temp
+boxplot(ozone$temp, horizontal = TRUE,
+        col = 'lightblue',
+        xlab ='Distribution of temp')
+text(x=fivenum(ozone$X), 
+     labels=fivenum(ozone$temp), 
+     y=1.25) 
+text(x=fivenum(ozone$temp),
+                  labels =c('Min','Q1','Q2','Q3','Max'),
+                  y=0.75)
+
+# Box plot of just temp rounding numbers to two decimals 
+# places for visibility
+
+# Storing fivenum values separately so full values can be used for
+# proper location and truncated can be used for labels
+five = fivenum(ozone$O3)
+five_round = round(five, 2)
+boxplot(ozone$O3, horizontal = TRUE,
+        col = 'pink',
+        xlab ='Distribution Ozone')
+text(x=five, 
+     labels=five_round, 
+     y=1.25) 
+text(x=five,
+     labels =c('Min','Q1','Q2','Q3','Max'),
+     y=0.75)
+```
+
+a-) Create train and test data sets. Use 70% of the data for train data set and use remaining data (30% of data) for test data set (use set.seed(1023)). (5 points)
+
+```{r}
+pairs(ozone[, c('temp', 'humidity', 'ibh', 'O3')])
+```
+
+```{r}
+# Splitting the observations in our ozone data frame into two groups
+# 70% for training the model and 30% reserved to test against the 
+# model.
+
+# Selecting the seed to reference for reproducability when splitting
+# the data
+set.seed(1023)
+
+# splitting the data
+o3_split = createDataPartition(y = ozone$O3, p = .7, list = FALSE)
+
+train = ozone[o3_split,]
+test = ozone[-o3_split,]
+
+```
+
+```{r}
+str(train)
+str(test)
+head(train)
+head(test)
+```
+
+
+
+b-) Build a regression model to predict O3 on the train data set. Write down the regression model and comment on the model performance. (5 points)
+
+```{r}
+# Building the regression model from the training data
+o3_lm_train = lm(O3 ~ temp+humidity+ibh,data=train)
+summary(o3_lm_train)
+```
+```{r}
+anova(o3_lm_train)
+```
+```{r}
+o3_lm_train_sans_temp = lm(O3 ~ humidity+ibh,data=train)
+o3_lm_train_sans_humidity = lm(O3 ~ temp+ibh,data=train)
+o3_lm_train_sans_ibh = lm(O3 ~ temp+humidity,data=train)
+```
+```{r}
+anova(o3_lm_train, o3_lm_train_sans_temp)
+anova(o3_lm_train, o3_lm_train_sans_humidity)
+anova(o3_lm_train, o3_lm_train_sans_ibh)
+```
+
+Answer: $\hat{O3} = -10.9 + .332*temp + .0767*humidity - .000965*ibh$
+
+The model performance is solid. The p-values are all close to zero for every variable, and a low p-value for the F-statistic which itself is large (156.1) indicating that there is very likely a linear relationship between the dependent and independent variables. The adjusted R-squared is .6672 so a moderate amount of variation is explained by the model. Using ANOVA and checking the change in SSR in reduced models, we see that the full model has an SSR of 4843.5 and it goes to 8480.6 without temp, 5313.8 without humidity, and 5335.9 without ibh. This shows that all three variables are very significant in the model and the three low p-values back this up that none of them should be removed. This also shows that covariance is likely very low and that temp has the highest impact on the model and has the more explanitory power towards the variation in O3 than the variables.
+
+
+
+
+c-) Visually by using the graphs, comments on regression model assumptions.(5 points)
+
+```{r}
+plot(train$temp,train$O3,xlab="Temprature in Celcius",ylab="O3")
+plot(train$humidity,train$O3,xlab="Percent Humidity",ylab="O3")
+plot(train$ibh,train$O3,xlab="Inversion Base Height in Meters",ylab="O3")
+```
+
+```{r}
+ols_test_breusch_pagan(o3_lm_train)
+plot(o3_lm_train)
+qchisq(.95, df=1)
+```
+```{r}
+# Plotting histogram of residuals
+res = residuals(o3_lm_train)
+
+hist(res,
+     breaks = 15,
+     col = 'lightblue',
+     main = 'Histogram of Residuals',
+     xlab = 'Residuals',
+     ylab = 'Frequency',
+     freq = TRUE)
+
+# Adding a normal curve over top for comparison
+xfit = seq(min(res), max(res), length=100)
+yfit = dnorm(xfit, mean=mean(res), sd=sd(res))
+yfit = yfit * length(res) * diff(hist(res, 
+                                    breaks = 15, 
+                                    plot=FALSE)$breaks[1:2])
+lines(xfit, yfit, col='red', lwd=2)
+```
+
+Answer: Looking at all of our point plots, a slight trend is visible in all of them when each variable is plotted directly against O3 but with a lot of noise and changes in variance across the plots. It is hard to make any generalizations of a multi-variable linear regression model based on comparisons with the individual independent variables however. Looking at the Residuals vs Fitted plot, there is quite clearly a pattern to the residuals indicating non-linearity. The loess line is shaped like a conic/bowl curve, indicating the likely need for a transform to the data. The Scale-Location plot's loess smooth curve isn't horrible but it certainly trends upwards slightly but consistently. The data doesn't look quite as funneled but still somewhat funneled. 
+
+There also does appear to be a funnel shape to the data. The Q-Q plot is decent but does indicate a right skew and that the residuals may not be fully normal. However, the skew is not very severe.
+
+The Residuals vs Leverage plot looks good. The loess smooth curve doesn't stray too far from 0 and there are no overly influential points close-to-beyond the Cook Distance.
+
+
+
+
+
+d-) Test the model performance on the test data and comment of model stability nd performance. (5 points)
+
+```{r}
+predicted_train = predict(o3_lm_train, train)
+
+model_train = data.frame(obs = train$O3, pred = predicted_train)
+
+defaultSummary(model_train)
+```
+```{r}
+predicted_test = predict(o3_lm_train, test)
+
+model_test = data.frame(obs = test$O3, pred = predicted_test)
+
+defaultSummary(model_test)
+```
+
+Answer: R-squared improved slightly with the test data and mean average error and root mean squared error both decreased slightly show that the model was a slightly better fit for the test data. This means that there doesn't seem to be any over fitting. Our R-squared in both is decent so that would point to it not underfitting. However, our Residuals vs Fitted and S-L plots seem to indicate that a transform would improve our model. This would mean that our model is slightly to simple to capture the structure of the variance and that would mean that it is slightly underfit. 
+
+
+
+
+
+e-) Perform Breusch-Pagan Test, write down null and alternative hypotheses and your conclusion.(5 points)
+
+```{r}
+library(lmtest)
+# Performing Breusch-Pagan Test on model
+bptest(o3_lm_train)
+```
+Answer: Null hypothesis: variance is consistent across the model (homoskedasticity).
+
+Alternative hypothesis: variance is not consistent across the model (homoskedasticity).
+
+Our p-value of 0.0001163 is smaller than our critical value of .05, so we reject the null hypothesis that variance is consistent across the model, and our finding supports that the data model is heteroskedastic.
+
+
+
+
+
+f-) Use the Box–Cox method to determine the best transformation on the response. if transformation is needed, perform the transformation and rebuild the model on the train data and check the model stability on the test data set. (25 points)
+
+```{r}
+# performing Box-Cox test 
+bc = boxcox(o3_lm_train,lambda=seq(-1,2,0.05))
+
+# Finding optimal lambda value
+lambda = bc$x[which.max(bc$y)]
+lambda 
+```
+```{r}
+# Lambda value consistent with right skew shown on Q-Q plot
+
+# Adding a column to the train data frame for our transformed values of lambda
+# for easy reference when plotting
+train$O3_bc = (train$O3^lambda - 1)/lambda
+
+test$O3_bc = (test$O3^lambda - 1)/lambda
+
+# Creating linear model against transformed data
+o3_lm_bc = lm(O3_bc ~ temp + humidity + ibh, data = train)
+summary(o3_lm_bc)
+```
+```{r}
+plot(train$temp,train$O3_bc,xlab="Temprature in Celcius",ylab="Transformed O3")
+plot(train$humidity,train$O3_bc,xlab="Percent Humidity",ylab="Transformed O3")
+plot(train$ibh,train$O3_bc,xlab="Inversion Base Height in Meters",ylab="Transformed O3")
+```
+```{r}
+# Plotting slate of residual plots for visual evaluation of transformed model
+ols_test_breusch_pagan(o3_lm_bc)
+plot(o3_lm_bc)
+qchisq(.95, df=1)
+```
+
+```{r}
+# Plotting histogram of residuals
+res = residuals(o3_lm_bc)
+
+hist(res,
+     breaks = 15,
+     col = 'lightblue',
+     main = 'Histogram of Residuals',
+     xlab = 'Residuals',
+     ylab = 'Frequency',
+     freq = TRUE)
+
+# Adding a normal curve over top for comparison
+xfit = seq(min(res), max(res), length=100)
+yfit = dnorm(xfit, mean=mean(res), sd=sd(res))
+yfit = yfit * length(res) * diff(hist(res, 
+                                    breaks = 15, 
+                                    plot=FALSE)$breaks[1:2])
+lines(xfit, yfit, col='red', lwd=2)
+```
+
+```{r}
+# Evaluating transformed model on training data for comparison
+predicted_train_bc = predict(o3_lm_bc, train)
+
+model_train_bc = data.frame(obs = train$O3_bc, pred = predicted_train_bc)
+
+defaultSummary(model_train_bc)
+```
+
+```{r}
+# Evaluating model on transformed test data
+predicted_test_bc = predict(o3_lm_bc, test)
+
+model_test_bc = data.frame(obs = test$O3_bc, pred = predicted_test_bc)
+
+defaultSummary(model_test_bc)
+```
+
+```{r}
+# Performing Breusch-Pagan Test on transformed model
+bptest(o3_lm_bc)
+```
+
+Answer: transformed model: $\hat{O3} = (.24(-.340 + .0509*temp + .0120*humidity - .000181*ibh)+1)^{\frac{1}{.24}}$
+
+After the Box-Cox transform using a lambda of .24, the model fits quite a bit better. The R-squared has risen slightly from 0.6715 to 0.7045. I noticed that the R-squared could be risen even higher to .706 with a lambda of .35 but that was slightly outside of our confidence interval, and it seemed like it looked slightly worse over our series of graphs evaluating the resdiduals, so I decided to stay with the suggested lambda which seemed to balance things better. Our p-values for all of our independent variables and our F-statistic are all once again close to 0. 
+Our Q-Q plot now indicates perhaps a very slight left skew but is well within expectations for a normal distribution. There is still a slight pattern to the Residuals vs Fitted plot but it is less pronounced. The funnel shape is less pronounced but there is a slight buldge in the middle. The loess curve on the Scale-Location plot is much flatter now, and there isn't any apparent funnel shape. Residuals vs Leverage still looks good as it did before.
+
+The model still has a higher R-squared with the training data, indicating that it is not over fit. Perhaps it is still a slight underfit if another variable could improve it further but at the moment it seems pretty well fit.
+
+The results of the Breusch-Pagan Test came back with a p-value of 0.1826 which is now greater than our alpha value of .05. For our transformed data we fail to reject the null hypothesis, indicating that variance is consistent across the model.
+
+
+
+
+
+## Problem 3
+
+Using the teengamb data in the Faraway r library (data(teengamb)), fit a model with gamble as the response and the other variables as predictors (20 points total).
+
+```{r}
+data(teengamb)
+```
+
+
+a-) Predict the data(teengamb)amount that a male with average (given these data) status, income and verbal score would gamble along with an appropriate 95% CI (5 points).
+
+```{r}
+gamb_lm = lm(gamble ~ verbal + income + status + sex, data=teengamb)
+summary(gamb_lm)
+```
+```{r}
+ols_test_breusch_pagan(gamb_lm)
+plot(gamb_lm)
+qchisq(.95, df=1)
+```
+```{r}
+# performing Box-Cox test 
+# bc = boxcox(gamb_lm,lambda=seq(-1,2,0.05))
+
+# Finding optimal lambda value
+# lambda = bc$x[which.max(bc$y)]
+# lambda 
+# This created an error: Error in boxcox.default(gamb_lm, lambda = seq(-1, 2, 0.05)) : 
+#  response variable must be positive
+```
+```{r}
+# Checking for 0 values causing error
+summary(gamb_lm$model$gamble)
+```
+```{r}
+# Shifting gamble values all up by one in order to compensate for this
+df_teen = teengamb
+df_teen$gamble_shift = (df_teen$gamble + 1)
+gamb_lm2 = lm(gamble_shift ~ verbal + income + status + sex, data=df_teen)
+summary(gamb_lm)
+summary(gamb_lm2)
+```
+```{r}
+# Checking for 0 values causing error
+summary(gamb_lm2$model$gamble_shift)
+```
+```{r}
+# All significant statistics looked to have remained the same or increased by 
+# one in the manner expected. Now to repeat attempt at Box-Cox
+bc = boxcox(gamb_lm2,lambda=seq(-1,2,0.05))
+
+# Finding optimal lambda value
+lambda = bc$x[which.max(bc$y)]
+lambda 
+```
+```{r}
+# Applying transformation to model, maintinaing shift.
+df_teen$gamb_bc = (df_teen$gamble_shift^lambda - 1)/lambda
+
+# Creating linear model against transformed data
+gamb_lm_bc = lm(gamb_bc ~ verbal + income + status + sex, data=df_teen)
+summary(gamb_lm_bc)
+```
+```{r}
+# After messing with some values, using the log of gamble for the transform 
+# seems to increase the R-squared while keeping similar p-values and pretty
+# much all other statistics constant, so I will use it from now on.
+df_teen$gamb_log = (log(df_teen$gamble_shift))
+
+gamb_lm_log = lm(gamb_log ~ verbal + income + status + sex, data=df_teen)
+summary(gamb_lm)
+summary(gamb_lm_log)
+```
+```{r}
+# This model performs much better. The R-squared is still moderate and all the
+# p-values for each of the coefficients are now significant to the .05 threshold
+# which previously only two were
+ols_test_breusch_pagan(gamb_lm_log)
+plot(gamb_lm_log)
+qchisq(.95, df=1)
+```
+```{r}
+# While the R-squared did decrease slightly, the residuals look much more
+# normalized now. If the residuals aren't normalized then we cannot trust the
+# R-squared value, F-test, or t-values, so this is worth it to trust the  
+# summary of our model reflects the accurate relationship between our
+# model and the true values.
+
+# Now to predict the average male's weekly gambling spend
+# I will add the independent variable values of the two hypothetical 
+# observations we want to predict to a new data frame with the same key columns 
+# as our original, taking the mean and max of the columns of each and setting
+# sex to 1 for male
+prediction_points = data.frame(
+  verbal = c(mean(df_teen$verbal, na.rm = TRUE), max(df_teen$verbal)),
+  income = c(mean(df_teen$income, na.rm = TRUE), max(df_teen$income)),
+  status = c(mean(df_teen$status, na.rm = TRUE), max(df_teen$status)),
+  sex = c(1, 1)
+)  
+
+# Now I will run those values through our model to create vector with the
+# predicted values
+predicted_gamble = predict(gamb_lm_log, newdata = prediction_points)
+predicted_gamble
+
+# Now I have to run the predictions back through our transformation to get the
+# untransformed prediction of weekly money spent gambling.
+exp(predicted_gamble)-1
+
+# Now to create the confidence interval with the transformation
+predicted_ci = - 1 + exp(predict(
+  gamb_lm_log,
+  newdata = prediction_points,
+  interval = "confidence"  # defaults to 95% confidence interval
+))
+predicted_ci
+```
+```{r}
+# To help answer questions, here is the untransformed confidence interval
+predicted_ci_log = predict(
+  gamb_lm_log,
+  newdata = prediction_points,
+  interval = "confidence"  # defaults to 95% confidence interval
+)
+predicted_ci_log
+```
+
+$\hat{gamble} = e^{1.716  -0.262*verbal + 0.216*income + 0.0298*status - 0.871*sex} - 1$
+
+Answer: The average male is predicted with 95% confidence to spend between \$1.42 and an upper bound of \$6.56 on gambling, with an exact predicted spend of \$3.28. 
+
+
+
+
+
+b-) Repeat the prediction for a male with maximal values (for this data) of status, income and verbal score. Which CI is wider and why is this result expected? (5 points)
+
+Answer: The maximal male is predicted with 95% confidence to spend between \$6.13 and an upper bound of \$228.74 on gambling, with an exact predicted spend of \$39.47. 
+
+The main reason the interval is larger is because of the nature of the transform. An increase of one along the x-axis of an exponential growth graph has bigger increase in y further along the axis, so an interval of 2 in the x-axis starting at a smaller x-value is going to correspond to a smaller interval in the y-axis than an interval of 2 in the x-axis with starting at a larger x-value. However, even before the transform the interval was larger, and that is because at the extremes of our data, we have less information (there are no points in one direction of the maximum to compare to), particularly if the data is normalized or if there are outliers. We have to reflect this lesser certainty with a larger confidence interval.
+
+
+
+
+
+c-) Fit a model with sqrt (gamble) as the response but with the same predictors. Now predict the response and give a 95% prediction interval for the individual in (a). Take care to give your answer in the original units of the response (5 points).
+
+```{r}
+df_teen$gamble_sqrt = sqrt(df_teen$gamble)
+gamb_lm_sqrt = lm(gamble_sqrt ~ verbal + income + status + sex, data=df_teen)
+summary(gamb_lm_sqrt)
+summary(gamb_lm)
+```
+```{r}
+# Now I will run those values through our model to create vector with the
+# predicted values
+predicted_gamble_sqrt = predict(gamb_lm_sqrt, newdata = prediction_points)
+predicted_gamble_sqrt
+
+# Now I have to run the predictions back through our transformation to get the
+# untransformed prediction of weekly money spent gambling.
+predicted_gamble_sqrt^2
+
+# Now to create the confidence interval with the transformation
+predicted_ci_sqrt = (predict(
+  gamb_lm_sqrt,
+  newdata = prediction_points,
+  interval = "confidence"  # defaults to 95% confidence interval
+))^2
+predicted_ci_sqrt
+```
+
+Answer: The average male is predicted with 95% confidence to spend between \$0.82 and an upper bound of \$9.61 on gambling, with an exact predicted spend of \$4.02. 
+
+
+
+
+d-) Repeat the prediction for the model in (c) for a female with status=20, income=1, verbal = 10. Comment on the credibility of the result (5 points).
+
+```{r}
+# Creating dataframe with the single observation we want to predict
+prediction_point2 = data.frame(
+  verbal = 10,
+  income = 1,
+  status = 20,
+  sex = 0
+)  
+
+# Now I will run that value through our model to create vector with the
+# predicted values
+predicted_gamble_sqrt_2 = predict(gamb_lm_sqrt, newdata = prediction_point2)
+predicted_gamble_sqrt_2
+
+# Now I have to run the predictions back through our transformation to get the
+# untransformed prediction of weekly money spent gambling.
+predicted_gamble_sqrt_2^2
+
+# Now to create the confidence interval with the transformation
+predicted_ci_sqrt_2 = (predict(
+  gamb_lm_sqrt,
+  newdata = prediction_point2,
+  interval = "confidence"  # defaults to 95% confidence interval
+))^2
+predicted_ci_sqrt_2
+```
+
+Answer: These values are somewhat nonsenseical. It appears that because the fit value is negative before the transform that the lower bound is negative and the upper bound is a similar positive number. So no I do not think these numbers are generally credible. Using a square root transform shouldn't allow for negative values. I think if I kept the shift I used in my log transform to keep the y values positive then it would have corrected for this mistake. It shows why Box-Cox requires all y values to be positive before the code to transform executes. 
+
+

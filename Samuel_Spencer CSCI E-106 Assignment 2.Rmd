@@ -1,0 +1,236 @@
+---
+title: 'CSCI E-106:Assignment 2'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Due Date: September 19, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+
+## Problem 1
+
+Refer to the Grade point average Data. The director of admissions of a small college selected 120 students at random from the new freshman class in a study to determine whether a student’s grade point average (GPA) at the end of the freshman year (Y) can be predicted from the ACT test score (X). (40 points)
+
+```{r}
+df_gpa = read.csv('Grade Point Average Data.csv')
+```
+
+```{r}
+# Doing preliminary data exploration
+summary(df_gpa)
+```
+
+```{r}
+hist(df_gpa$Y, main="Distribution of GPA",
+     xlab="GPA",
+     col = "darkblue", border = "black")
+```
+
+```{r}
+hist(df_gpa$X, main="Distribution of ACT Scores",
+     xlab="ACT Scores",
+     col = "darkblue", border = "black")
+```
+
+```{r}
+boxplot(Y ~ X, data=df_gpa, main = 'Distribution of GPA by ACT Scores',
+        xlab='ACT Scores', ylab='GPA')
+```
+
+```{r}
+plot(df_gpa$X, df_gpa$Y,
+     main = "ACT Scores vs Freshman GPA",
+     xlab = "ACT",
+     ylab = "GPA"
+     )
+```
+
+
+a-) Build a regression model.  Write down the stand error of the slope and intercept. Plot regression line. Comment on the model performance.(20 points)
+
+```{r}
+# Performing initial linear progression
+model_gpa = lm(Y ~ X, data = df_gpa)
+print(summary(model_gpa))
+
+# Plotting data with best fit line
+plot(df_gpa$X, df_gpa$Y,
+     main = "ACT Scores vs Freshman GPA with Best Fit Line",
+     xlab = "ACT",
+     ylab = "GPA"
+     )
+abline(model_gpa)
+```
+Answer: The regression model for ACT vs GPA is: $\hat{GPA} = 2.11405 + 0.03883*ACT$
+
+The standard area for the slope and intercept are .01277 and .32089 respectively, indicating that any sample with the same sample size, given the distribution of data would only allow us to generate an estimate of the slope and intercept at distances with standard deviations of .01277 and .32089 from their true values respectively. In other words you were to graph all the estimated slopes from similar samples then those estamates would have a standard deviation of .01277 around a mean representing a true value, and the same works for the intercept.
+
+A p-value of .002917 is below the .05 threshold to reject the null hypothesis and supports the alternative hypothesis that that variability in College Freshman GPA can be explained by ACT scores. The low R-Squared suggests a weak correlation, with adjusted R-squared suggesting only 6.5% of the variance is explained by GPA in our model. The large F-statistic of 9.24 with a similarly low p-value support that this is a real relation ship and indicates that more variance is explained by the model than isn't. Looking at the plot with the best fit line, the data points seem quite randomly distributed around the line with no clear pattern emerging, at the higher end of ACT scores there is less room for more data points above the line while (since 4.0 is a hard max), and interestingly some of the lowest GPA's come from students on who received relatively high ACT scores, but due to the density of GPA scores above the best fit line at similar locations, it still looks like the line is a good fit.
+
+b-) Are the slope and intercept statistically significant?  Write down your null and alternative hypothesis and p value of the test. (10 points)
+
+The null hypothesis for the slope is that the true value for linear relationship between the dependent and independent variable has a slope of 0, which would indicate that there is no linear relationship between the variables.
+
+The null hypothesis for the intercept is similar where it suggests the true value for the intercept is 0, however this does not indicate on its own that there is no relationship. It can often be the case that the dependent variable with a strong linear relationship is close to 0 when the independent variable is close to 0.
+
+The alternative hypothesis for the slope is that the true value for the slope is not zero there is linear relationship and some variance of the dependent variable can be explained by the independent variable. 
+
+the null hypothesis for the intercept is that also that the true value for the intercept is not zero. This also doesn't tell us anything about whether there is a linear relationship. It could easily be a situation where the dependent variable is always the exact same value no matter what is the independent variable, or where it just never goes to 0 but the dependent does.
+
+p-values of .002917 and close to zero for slope and intercept respectively are both below the threshold of .05, which is statistically significant and causes us to reject the null hypothesis for both and support the alternative hypothesis that both the slope and the intercept are not equal to zero, indicating a linear relationship between the independent and dependent variables where when the independent variable is 0, the dependent variable is not 0. 
+
+c-) What is the error variance of the  regression line? (10 points)
+
+Answer:
+```{r}
+0.6231^2
+```
+The error variance is also called the Mean Square Error or the Residual Mean Square (MSE) is the variance of the error of  the square of the Residual Standard Error (RSE) which is standard deviation of the error of all the points relative to the estimated value. RSE = .6231. $RSE^2 = .6231^2 = 0.3882 = MSE$. This may look small but we are dealing with values from 0 to 4 and so an RSE of 1 would be an entire letter grade. Any less than that means we are squaring a number that is less than one makes it even smaller, so a small MSE can reflect a pretty large standard relative to the scale we are using. In this case its probably better to just evaluate the RSE which is .6231 which is nearly two grade signs (e.g. from a B- to a B+), so I woudln't say it shows particularly high precision of our model.
+
+
+## Problem 2 
+
+Refer to the CDI data set. The number of active physicians in a CDI (Y) is expected to be related to total population, number of hospital beds, and total personal income. (60 points)
+
+```{r}
+df_cdi = read.csv('CDI Data.csv')
+```
+```{r}
+hist(df_cdi$Number.of.active.physicians, main="Distribution of Physician count",)
+```
+
+```{r}
+# Creating dot plots of all independent and dependent variables compared against each other
+pairs(df_cdi[, c('Number.of.active.physicians', 'Total.population', 'Number.of.hospital.beds', 'Total.personal.income')])
+```
+
+a-)	Regress the number of active physicians in turn on each of the three predictor variables. State the estimated SINGLE regression functions. (10 points)
+
+```{r}
+# Creating our three single linear regression models.
+lm_pop = lm(Number.of.active.physicians ~ Total.population, data = df_cdi)
+lm_beds = lm(Number.of.active.physicians ~ Number.of.hospital.beds, data = df_cdi)
+lm_inco = lm(Number.of.active.physicians ~ Total.personal.income, data = df_cdi)
+print(summary(lm_pop))
+```
+```{r}
+print(summary(lm_beds))
+```
+```{r}
+print(summary(lm_inco))
+```
+
+Answer: The regression function for total population to number of doctors is $\hat{Number Of Physicians} = -.01106 + .002795*Total Population$
+
+The regression function for hospital beds to number of doctors is $\hat{Number Of Physicians} = -95.93218 + .74312*NumberOfHopitalBeds$
+
+The regression function for total personal income to doctors is $\hat{Number Of Physicians} = -48.39485 + .0.13170*Total Personal Income$
+
+
+b-)	Plot EACH of the three estimated regression functions and data on separate graphs. Does a linear SINGLE regression relation appear to provide a good fit for each of the three predictor variables? (10 points)
+
+```{r}
+# Plotting population vs doctors with best fit line
+plot(df_cdi$Total.population, df_cdi$Number.of.active.physicians,
+     main = "Total Population vs Number of Physicians with Best Fit Line",
+     xlab = "Total Population",
+     ylab = "Number of Active Physicians"
+     )
+abline(lm_pop)
+
+# Plotting beds vs doctors with best fit line
+plot(df_cdi$Number.of.hospital.beds, df_cdi$Number.of.active.physicians,
+     main = "Hospital beds vs Number of Physicians with Best Fit Line",
+     xlab = "Hospital bed count",
+     ylab = "Number of Active Physicians"
+     )
+abline(lm_beds)
+
+# Plotting income vs doctors with best fit line
+plot(df_cdi$Total.personal.income, df_cdi$Number.of.active.physicians,
+     main = "Total Personal Income vs Number of Physicians with Best Fit Line",
+     xlab = "Total Personal Income",
+     ylab = "Number of Active Physicians"
+     )
+abline(lm_inco)
+```
+Answer: All three have p-value's near 0 with large R-squared values and, looking at the graphs, they all seem to fit the data quite well. There are no obvious patterns in the error distribution. Most of the data is very clustered at the low end making it hard to get the clearest view but it seems seems like all three lines predict the number of doctors well for every sized county. Of all three the data does seem to fit most tightly around the line for the hospital bed model, but it's not a very big difference. There is a very slight pattern in the beds statistic where there seems to be a slight over prediction and then a slight under prediction that perhaps could be predicted better by an $x^3$ curve but that pattern only emerges from a few data points and is likely random noise, and given how good the fit is it is very unlikely that anything will fit it significantly better
+
+
+c-)	Calculate MSE for each of the three predictor variables. Which predictor variable leads to the smallest variability around the fitted regression line? Which variable would you use the estimate Y and why? (15 points)
+
+```{r}
+610.1^2
+
+556.9^2
+
+569.7^2
+```
+
+Answer: $RSE_{pop}^2 = 610.1^2 = 372,222 = MSE_{pop}$
+$RSE_{bed}^2 = 556.9^2 = 310,137.6 = MSE_{bed}$
+$RSE_{income}^2 = 569.7^2 = 324,558.1 = MSE_{bed}$
+
+Given the large numbers present in the data, all of these values are quite low suggesting quite a high precision. While changing variables in a model can lead to changes in scale of MSE, since scale is determined by the dependent variable and we are only changing independent variables, all three MSE values are on the same scale and can be compared. I think it is clear from the R-squared values, the MSE values, the F-Statistics, and just the visual eye test, that hospital beds are the best fit. It is also intuitive that they would be linked as one would imagine there are national standards around how many hospital beds a hospital most maintain based on the number of doctors in the hospital. At the same time, it is probably the least interesting model as the inherent connection between the two figures make it feel as if we really aren't learning much, and it might be more useful to have a model that uses more accessible pieces of information like county population. It seems unlikely that someone would have info on hospital beds without also having information on number of practicing physicians.
+
+
+d-) Calculate the Mean Absolute Error (MAE) for each of the three predictor variables. You can calculate the MAE by using the formula mean(abs(predicted Ys - actual Ys)). Which variable would you use the estimate Y and why? (15 points)
+
+```{r}
+# creating a vector of all the values in the Number.of.active.physicians column 
+# in our data frame
+y_true = df_cdi$Number.of.active.physicians
+
+# Making vectors of all the predicted values of y predicted from the values in 
+# the Total.population, Number.of.hospital.beds, and Total.personal.income
+# columns based on our three models.
+y_pop = predict(lm_pop, df_cdi)
+y_beds = predict(lm_beds, df_cdi)
+y_inco = predict(lm_inco, df_cdi)
+
+# Comparing each predicted y value in each vector to the corresponding true 
+# y values, taking its absolute value (saved in a new vector), and then using
+# the mean function which will sum all the absolute values and divide by the
+# number of items in the abs vector, in accordance with the MAE formula.
+mae_pop = mean(abs(y_true - y_pop))
+mae_beds = mean(abs(y_true - y_beds))
+mae_inco = mean(abs(y_true - y_inco))
+
+mae_pop
+mae_beds
+mae_inco
+```
+Answer: $MAE_{pop} = 338.9397$
+$MAE_{bed} = 314.637$
+$MAE_{income} = 314.5328$
+
+It is slightly surprising to me our beds vs doctors model has such a lower MSE than our income vs doctors model, yet of the two of them, our income vs doctors model has a slightly lower MAE. When viewing the plot of best fit lines, the bed model seems to fit over better with just a few larger outliers. One would think that those couple of outliers would have a smaller impact on MAE and lead to it being even smaller relative to the similar values of the other models. However, once again, the charts are so densely populated at the bottom left that its hard to really evaluate and there are some outliers in those clusters for the income model as well that perhaps don't look as large just because they are near other data points. I would still use our bed model, as it has a higher R-squared and lower MSE. MSE and by extension RSE are generally considered better values for examining error of a model as they punish outliers more severely and the model is based around it. Even without knowing the MSE of both models, the MAE is so negligible that I would likely go with which ever function had the better R-squared. 
+
+
+e-) For the regression model you choose, Are the slope and intercept statistically significant?  Write down your null and alternative hypothesis and p value of the test.(10 points)
+
+Answer:
+Null hypothesis for slope: the true value of $\beta_1$, the slope of the linear relationship between number of hospital beds and number of active physicians is equal to zero, implying there is no linear relationship.
+
+Alternative hypothesis for slope: the true value of $\beta_1$, the slope of the linear relationship between number of hospital beds and number of active physicians, is not equal to zero, implying there is no linear relationship.
+
+Null hypothesis for intercept: the true value of $\beta_0$, the intercept of the linear relationship between number of hospital beds and number of active physicians, is equal to zero, implying when hospital beds is zero then number of active physicians is also 0.
+
+Alternative hypothesis for intercept: the true value of $\beta_0$, the intercept of the linear relationship between number of hospital beds and number of active physicians, is not equal to zero, implying when hospital beds is zero then number of active physicians is not also 0.
+
+The p-value for our slope coefficient is near zero. This is statistically significant as it is well below our threshold of .05, causing us to reject the null hypothesis and supports the alternative hypothesis that there is a linear relationship between the variables with a non-zero slope.
+
+The p-value for our intercept coefficient is 0.00246. This is statistically significant as it is well below our threshold of .05, causing us to reject the null hypothesis and supports the alternative hypothesis that when the number of hospital beds is 0, the number of physicians is not 0. 

@@ -1,0 +1,547 @@
+---
+title: 'CSCI E-106:Assignment 9'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+```{r}
+install.packages('ARDL') 
+```
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(ARDL)
+library(urca)
+library(tseries)
+library(lmtest)
+library(desk)
+```
+
+\
+
+### Due Date: November 14, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+## Problem 1
+
+Refer to the Advertising Agency data. The managing partner of an advertising agency is interested in the possibility of making accurate predictions of monthly billings. Monthly data on amount of billings (Y. in thousands of constant dollars) and on number of hours of staff time (X, in thousand hours) for the 20 most recent months follow. A simple linear regression model is believed to be appropriate. but positively autocorrelated error terms may be present. 
+
+```{r}
+df = read.csv('Advertising Agency.csv')
+```
+```{r}
+summary(df)
+```
+```{r}
+head(df)
+```
+```{r}
+nrow(df)
+```
+```{r}
+cor(df[, sapply(df, is.numeric)])
+```
+```{r}
+plot(df$X, df$Y,
+     main = "Hours vs Thousands of Dollars Billed",
+     xlab = "Hours of Staff Time",
+     ylab = "Thousands of Constant Dollars"
+     )
+```
+```{r}
+# Staff time Historgram
+hist(df$X, main="Distribution of Hours of Staff Time",
+     xlab="Hours of Staff time",
+     col = "darkblue", border = "black")
+
+# Dollars Historgram
+hist(df$Y, main="Distribution of Thousands of Constant Dollars",
+     xlab="Thousands of Constant Dollars",
+     col = "darkblue", border = "black")
+```
+
+
+
+a-) Fit a simple linear regression model by ordinary least squares and obtain the residuals. State the regression equation. Also obtain  $s(b_0)$ and $s(b_1)$. Plot the residuals against time and explain whether you find any evidence of positive autocorrelation. Conduct a formal test for positive autocorrelation using alpha = .05. State the alternatives (Hypothesis), decision rule and conclusions. Does your visual inspection of the residual plot confirms the formal test results? (20 points)
+
+```{r}
+lm = lm(Y ~ X, data = df)
+summary(lm)
+```
+```{r}
+# Plotting data with best fit line
+plot(df$X, df$Y,
+     main = "Staff hours vs Billings with Best Fit Line",
+     xlab = "Hours of Staff Time",
+     ylab = "Thousands of Constant Dollars"
+     )
+abline(lm)
+```
+
+```{r}
+plot(residuals(lm),
+     type = 'b',
+     xlab = 'Month (Index)',
+     ylab = 'Residuals',
+     main = 'Residuals vs Month')
+abline(h = 0, lty = 2)
+
+```
+
+```{r}
+dwtest(lm)
+```
+
+
+Answer: $\hat{Y} = 93.6865 + 50.8801 * X$
+
+$s(\beta_0) =  0.8229$ and $s(\beta_1) = 0.2634$. Given the size of $\beta_0$ and $\beta_0$ this shows an extremely high level of percesion in the model, which is refelcted in the p-values of near 0, below our alpha of .05. Graph of residuals vs time shows some cycling every 12 entries, which is a sign of positive seasonal autocorrelation, though we don't have two full years of data so we can't even compare one full year to another. Still the general pattern across the three seasons we have two examples of does look quite clear despite some general variance between individual months year-over-year.
+
+The Null Hypothesis of the Durban-Watson test is that the true autocorrelation is 0, i.e. that the data is not autocorrelated. The Alternative Hypothesis is that the true autocorrelation is greater than 0, i.e. there is positive autocorrelation, i.e. the data is autocorrelated, in this case, likely due to the fact that it is time series data effected by seasons. The p-value of our Durban-Watson test was 0.002891 which is below our critical value of .05 leading us to regect the null hypothesis and accept the alternative hypothesis, supporting the conclusion that there is positive autocorrelation. This is supported by our visual inspection.
+
+
+
+
+
+b-) Using the estimated regression function in part (a) apply the Cochrane-Orcutt procedure to obtain a point estimate of the autocorrelation parameter (RHO). How well does the approximate relationship between the point estimate and the Durbin-Watson test statistic? D ~ 2*(1 - RHO). Use one iteration to obtain the estimates of the regression coefficients $b_0^{'}$ and $b_0^{'}$ and their corresponding $s(b_0^{'})$ and $s(b_1^{'})$ in the transformed model (reparametrized for reasons of autocorrelation). State the new regression function. Test whether any positive autocorrelation remains after the first iteration using alpha = .05 State the alternatives, decision rule, and conclusion.(10 points)
+
+```{r}
+# Assigning the residuals of our linear model to the vector e
+e = residuals(lm)
+
+# e1 is a vector of the values of e but excluding the first entry
+e1   = e[2:length(e)]   
+# e2 is a vector with the values of e exclusing the last entry
+eLag = e[1:(length(e) - 1)]     
+
+# Taking a sum of least squares regression predicting each value of each residual 
+# based on the previous residual and then outputting the slope of that sum of
+# least squares regression.
+rho_hat = coef(lm(e1 ~ eLag))[2]
+rho_hat
+
+```
+```{r}
+2*(1-rho_hat)
+```
+
+
+
+
+```{r}
+y = df$Y
+x = df$X
+rho = rho_hat
+
+# Taking the coefficient rho found previously and conducting the same equation
+# of subtracting each entry by its previous entry, however we are doing now
+# for each value of x and each value of y and the previous entry is multiplied
+# by rho to make the error of each entry independent and remove their trend.
+y_star = y[2:length(y)] - rho * y[1:(length(y) - 1)]
+x_star = x[2:length(x)] - rho * x[1:(length(x) - 1)]
+```
+```{r}
+co_lm = lm(y_star ~ x_star)
+summary(co_lm)
+```
+
+
+Note: I know you guys don't write the questions but man that is a pretty horribly written question. Crucial missing words and incorrectly written variables. Jeez O' Peez.
+
+```{r}
+plot(residuals(co_lm),
+     type = 'b',
+     xlab = 'Month (Index)',
+     ylab = 'Residuals',
+     main = 'Residuals vs Month')
+abline(h = 0, lty = 2)
+
+```
+```{r}
+dwtest(co_lm)
+```
+
+Answer: $\beta_0^{'} = 62.4114$ and $\beta_1^{'} = 50.5391$ while $s(\beta_0^{'}) = 0.5552$ and $s(\beta_1^{'}) = 0.2643$  
+
+Transformed regression function: $\hat{Y_t^{'}} = 62.4114 + 50.5391 * X_t^{'}$. 
+
+Our Rho value was $0.3423483$ and when used in the formula to compare to our Durban Watson test value ($D ~ 2*(1 - RHO)$), we get the result:
+$D = 0.97374 ~ 2*(1 - \hat{\rho}) = 2*(1 - 0.3423483) = 1.315$.
+There is a bit of a descrepancy between the two sides of the inequality, but that is to be expected with a sample size as small as 20. The most significant thing is that both sides of the inequality are less than 2 meaning they both agree in indicating that our un-transformed model is positively autocorrelated.
+
+When using a Durbin-Watson test to evaluate our transformed model, our null hypothesis and our alternative hypothesis are the same as they were when we were testing our un-transformed regression model. The null hypothesis is that our transformation isn't positively autocorrelated, and our alternative hypothesis is that it is positively correlated. This time we have a p-value of .25 which is greater than our alpha of .05, meaning we fail to reject the null hypothesis and find our data is not positively autocorrelated. 
+
+
+
+
+
+
+c-) Restate the estimated regression function obtained in part (b) in terms of the original variables. Also obtain corresponding $s(b_0)$ and $s(b_1)$. Compare the estimated regression coefficients obtained with the Cochrane-Orcutt procedure and their estimated standard deviations with those obtained with ordinary least squares in part (a). Based on the results here and in part (b), does the Cochrane-Orcutt procedure appear to have been effective here? (10 points)
+
+```{r}
+# obtaining s(b_0)
+0.5552/(1-0.3423483)
+```
+```{r}
+# obtaining s(b_1)
+0.2643/(1-0.3423483)
+```
+
+
+Answer:
+Regression equation using original values:
+$Y_t - 0.3423483 * Y_{t-1} = 93.6865 * (1 - 0.3423483) + 50.8801 * (X_t - 0.3423483 * X_{t-1}) + u_t$
+
+Regression equation usable for predictions with original values:
+$\hat{Y_t} = 93.6865 * (1 - 0.3423483) + 50.8801 * (X_t - 0.3423483 * X_{t-1}) + 0.3423483 * \hat{Y_{t-1}}$
+
+To calculate the new $s(\beta_0)$ and $s(\beta_1)$ we need transform our $s(\beta_0^{'})$ and $s(\beta_1^{'})$ using the equations 
+$s(\beta_0) = \frac{s(\beta_0^{'})}{(1-\rho)}$ and $s(\beta_1) = \frac{s(\beta_1^{'})}{(1-\rho)}$
+
+From that we get $s(\beta_0) = \frac{0.5552}{(1-0.3423483)} = 0.8442$ and $s(\beta_1) = \frac{0.2643}{(1-0.3423483)} = 0.4019$
+
+There is not much use in comparing $s(\beta_1)$ with $s(\beta_1^{'})$ and so on as they are being used on different data. When we untransform our Cochrane-Orcutt equation then we return to using our $\beta_0$ and $\beta_1$ variables but just also taking into account our previous values. This means that in order to predict out into the future, we have to predict every other date in between so we will have an accurate $y_{t-1}$ to use in the equation. We can compare standard deviations however. Both standard deviations grew slightly though the standard deviation for $\beta_0$ was negligable, which is to be expected as it should be less susceptible to autocorrelation. The standard deviation for $\beta_1$ almost doubled from 0.2634 to 0.4019. This is fine however. We should expect an increase in error as we reduce the autocorrelation tying the independent and dependent variables together. On the whole this is still a very small standard error and with the near 0 p-values for each of our variables and our f-statistic, this shows that our transformed model is still very precise and highly predictive.
+
+Yes the transformation seems to be effective as we still have very low standard error but now the DW test is showing that the autocorrelation is removed. Looking at the new residuals vs time graph, it appears like perhaps a small pattern remains, but it is certainly harder to discern and it makes sense why we would get a p-value of .25 in the DW test as the pattern is not strong enough to not assume it is just the human brain finding patterns in static.
+
+
+
+
+d-). Using the model estimated after applying the Cochrane-Orcutt procedure do the following prediction. Staff time in month 21 is expected to be 3.625 thousand hours. Predict the amount of billings in constant dollars for month 21, using a 99 percent prediction interval. Interpret your interval. Estimate $\beta_{1}$, with a 99 percent confidence interval. Interpret your interval estimate. (10 points)
+
+```{r}
+# We will just plug into our regression equation using the actual value of 20th
+# entry as our previous predicted y.
+# Entering in all variables for our equation
+y20 = df$Y[20]
+x20 = df$X[20]
+x21 = 3.625
+b0 = 93.6865
+b1 = 50.8801
+s_b1 = 0.4018845
+
+# Plugging our variables into our equation
+y21_hat = b0 * (1 - rho) + b1 * (x21 - rho * x20) + rho * y20
+y21_hat
+```
+
+```{r}
+# Now we will plug those values into the 99% confidence interval equation
+# First we need the variance of error for our transformed
+# model using the variance equation
+n = length(y)
+sigma_hat2 = sum(residuals(co_lm)^2) / co_lm$df.residual
+
+#Now we will get our standard error for our prediction
+se_pred = sqrt(sigma_hat2 * (1 + 1/n + ((x21 - mean(x_star))^2 / sum((x_star - mean(x_star))^2))))
+
+# Getting the 99% confidence interval t-value
+t = qt(0.995, df = n-2)
+CI_lower = y21_hat - t * se_pred
+CI_upper = y21_hat + t * se_pred
+
+CI_lower
+CI_upper
+```
+```{r}
+# Now to get the Confidence interval for beta_1
+CI_b1_lower = b1 - t * s_b1
+CI_b1_upper = b1 + t * s_b1
+CI_b1_lower
+CI_b1_upper
+```
+
+Answer: based on staff working 3,625 hours next month, we can predict the amount we will be billing to be between $\$276,721.60$ and $\$280,031.50$ (constant dollars) with a 99% confidence interval with a specfic predicted amount of $\$278,376.50$. (This situation also seems a bit silly to me though because why would I know my staffing for a month without also knowing billing? If I am looking out into the future and predicting staffing based on expected future projects, but I can just as easily predict future projects billing. Staffing can change expected billing because having too little staffing can mean a project runs for more than a month, but expected billing can also effect staffing because staffing decisions are based on expected revenue).
+
+Our $\beta_1$ 99% interval is from 49.80 and 51.96. 
+
+
+e-)Use the Hildreth-Lu procedure to obtain a point estimate of the autocorrelation parameter. Do a search at the values RHO = .1, .2, ... , 1.0 and select from these the value of RHO that minimizes SSE. Based on your result of RHO obtain an obtain the estimates of the regression coefficients $b_0^{'}$ and $b_0^{'}$ and their corresponding $s(b_0^{'})$ and $s(b_1^{'})$ in the transformed model (reparametrized for reasons of autocorrelation). Test whether any positive autocorrelation remains in the reparametrized regression model;
+use alpha = .05 State the alternatives, decision rule, and conclusion (10 points).
+
+
+```{r}
+# Setting the columns to vectors
+y = df$Y
+x = df$X
+n = length(y)
+stopifnot(length(x) == n)
+
+# Getting the Hildreth-Lu grid values from 0.1, to 1.0 at intervals of 0.1
+rho_grid = seq(0.1, 1.0, by = 0.1)
+
+
+ssr = numeric(length(rho_grid))
+ok = logical(length(rho_grid))
+
+# Creating a loop to test each value of rho
+for (i in seq_along(rho_grid)) {
+  rho = rho_grid[i]
+
+  # Building transformed variables as we did in the previous section
+  y_star = y[2:n] - rho * y[1:(n - 1)]
+  x_star = x[2:n] - rho * x[1:(n - 1)]
+
+  ssr[i] = sum(residuals(lm(y_star ~ x_star), silent = TRUE)^2)   # SSR on transformed regression
+  ok[i] = TRUE
+}
+
+# Showing grid results by saving all rho values into a dataframe
+results_df = data.frame(rho = rho_grid, SSR = ssr, ok = ok)
+print(results_df)
+
+
+# Picking the value of rho that minimizes SSR
+min_idx = which.min(ssr)
+rho_hat = rho_grid[min_idx]
+cat('Chosen rho_hat =', rho_hat, '\n')
+
+# Fitting final transformed model at rho_hat
+y_star = y[2:n] - rho_hat * y[1:(n - 1)]
+x_star = x[2:n] - rho_hat * x[1:(n - 1)]
+hl_lm = lm(y_star ~ x_star)
+
+# coefficient table for transformed (reparametrized) model
+sum_final = summary(hl_lm)
+coef_table = sum_final$coefficients
+
+# Making a table of our transformed slope and intercept as well as their 
+# standard error
+b0p = coef_table[1, 'Estimate'] 
+s_b0p = coef_table[1, 'Std. Error']
+b1p = coef_table[2, 'Estimate']
+s_b1p = coef_table[2, 'Std. Error']
+
+cat('Transformed model (t = 2..n) results:\n')
+cat('b0\' (intercept, transformed) =', b0p, '   s(b0\') =', s_b0p, '\n')
+cat('b1\' (slope, transformed)     =', b1p, '   s(b1\') =', s_b1p, '\n')
+
+# residual variance estimate (sigma_hat) for transformed model
+sigma_hat = sqrt(sum(residuals(hl_lm)^2) / hl_lm$df.residual)
+cat('sigma_hat =', sigma_hat, '\n')
+
+# Testing our new model for remaining positive autocorrelation using DW
+dw = dwtest(hl_lm)
+
+print(dw)   # prints DW statistic and p-value
+```
+```{r}
+summary(hl_lm)
+```
+
+```{r}
+plot(residuals(hl_lm),
+     type = 'b',
+     xlab = 'Month (Index)',
+     ylab = 'Residuals',
+     main = 'Residuals vs Month')
+abline(h = 0, lty = 2)
+```
+
+
+Answer: our regression model using Hildreth-Lu is $\hat{Y_t^{'}} = 57.0406 + 50.4925 * X_t^{'}$
+
+Our selected value for $\hat{\rho}$ is .04. $b_0^{'} = 57.0406$ and $b_1^{'} = 50.4925$ while $s(b_0^{'} = 0.5329)$ and $s(b_1^{'} = 0.2770)$
+
+All of these values are very similar to our CO transformation which makes sense as we chose very nearly the closest rho value available to the rho found using that method. B1 is nearly unchanged. B2 changed slightly downward meaning the only real difference is that this transformation is shifted slightly lower. However, the different rho means that the values being plugged into the equation are different. DW p-value is 0.3509 greater than the alpha of .05 meaning that we fail to reject the null hypothesis and conclude that there is not positive autocorrelation. 
+
+
+
+
+
+f-) Restate the estimated regression function obtained using the Hildreth-Lu procedure in terms of the original variables. Also obtain $s(b_0)$ and $s(b_1)$. Compare the estimated regression coefficients obtained with the Hildreth-Lu procedure and their estimated standard deviations with those obtained with ordinary least squares in (a). Based on the results above has the Hildreth-Lu procedure been effective here? (10 points)
+
+
+```{r}
+s_b0p/(1-.4)
+```
+```{r}
+s_b1p/(1-.4)
+```
+```{r}
+s_b1p
+```
+
+
+
+Answer: 
+
+Regression equation using original values:
+$Y_t - .4 * Y_{t-1} = 93.6865 * (1 - .4) + 50.8801 * (X_t - .4 * X_{t-1}) + u_t$
+
+Regression equation usable for predictions with original values:
+$\hat{Y_t} = 93.6865 * (1 - .4) + 50.8801 * (X_t - .4 * X_{t-1}) + .4 * \hat{Y_{t-1}}$
+
+To calculate the new $s(\beta_0)$ and $s(\beta_1)$ we need transform our $s(\beta_0^{'})$ and $s(\beta_1^{'})$ using the equations 
+$s(\beta_0) = \frac{s(\beta_0^{'})}{(1-\rho)}$ and $s(\beta_1) = \frac{s(\beta_1^{'})}{(1-\rho)}$
+
+From that we get $s(\beta_0) = \frac{0.5329}{(1-0.4)} = 0.8881$ and $s(\beta_1) = \frac{0.2770}{(1-0.4)} = 0.4616$
+
+This compares to our original standard errors of $s(\beta_0) =  0.8229$ and $s(\beta_1) = 0.2634$
+
+From this we see that once again the standard error of $\beta_0$ has only increased slightly again, but more than previously. The error of $\beta_1$ has once again close to doubled but still has only increased marginally over CO. Both errors are still very small making it hard to say that this is an inferior model compared to CO and seems to clearly be an improvement over the original model as well.
+
+
+
+
+
+
+g-) Staff time in month 21 is expected to be 3.625 thousand hours. Predict the amount of billings in constant dollars for month 21, using a 99 percent prediction interval. Interpret your interval (5 points).
+
+```{r}
+y21_hat = b0 * (1 - rho_hat) + b1 * (x21 - rho_hat * x20) + rho_hat * y20
+y21_hat
+```
+```{r}
+sigma_hat2 = sum(residuals(hl_lm)^2) / hl_lm$df.residual
+
+#Now we will get our standard error for our prediction
+se_pred = sqrt(sigma_hat2 * (1 + 1/n + ((x21 - mean(x_star))^2 / sum((x_star - mean(x_star))^2))))
+
+# Getting the 99% confidence interval t-value
+t = qt(0.995, df = n-2)
+CI_lower = y21_hat - t * se_pred
+CI_upper = y21_hat + t * se_pred
+
+CI_lower
+CI_upper
+```
+```{r}
+# Now to get the Confidence interval for beta_1
+CI_b1p_lower = b1p - t * s_b1
+CI_b1p_upper = b1p + t * s_b1
+CI_b1p_lower
+CI_b1p_upper
+```
+
+Answer: based on staff working 3,625 hours next month, we can predict the amount we will be billing to be between $\$276,496.50$ and $\$280,340.60$ (constant dollars) with a 99% confidence interval with a specfic predicted amount of $\$278,418.60$. These predictions are very nearly identical to our CO predictions with only a range that is slightly wider by a few thousand dollars in each direction and a specific prediction that is only higher by about one-thousand dollars. Since this is our main point of comparison then it seems like this is essentially an equally useful.
+
+Our $\beta_1$ 99% interval is from 49.34 and 51.65. Surprisingly this a slighlty tighter interval, implying this model is slightly more confident that it knows where Beta_1 is. However, this is still in respect to transformed data, that is differently transformed than the last example meaning we are comparing apples and oranges.
+
+
+
+
+
+h-) Apply the first differences procedure and repeat (f) and (g) above, do not forget to compare with (a) (15 points).
+
+```{r}
+# Same procedure but just not using rho
+y_star = y[2:n] - y[1:(n-1)]
+x_star = x[2:n] - x[1:(n-1)]
+
+fd_lm = lm(y_star ~ x_star)
+
+# coefficient table
+sum_fd = summary(fd_lm)
+coef_table = sum_fd$coefficients
+
+# transformed slope/intercept and standard errors
+b0_fd = coef_table[1, 'Estimate']
+s_b0_fd = coef_table[1, 'Std. Error']
+b1_fd = coef_table[2, 'Estimate']
+s_b1_fd = coef_table[2, 'Std. Error']
+
+cat('First differences model results (t = 2..n):\n')
+cat('b0 (intercept, transformed) =', b0_fd, '   s(b0) =', s_b0_fd, '\n')
+cat('b1 (slope, transformed)     =', b1_fd, '   s(b1) =', s_b1_fd, '\n')
+
+# residual variance
+sigma_hat_fd = sqrt(sum(residuals(fd_lm)^2) / fd_lm$df.residual)
+cat('sigma_hat =', sigma_hat_fd, '\n')
+
+# Test for remaining positive autocorrelation
+library(lmtest)
+dw_fd = dwtest(fd_lm, alternative = 'greater')
+print(dw_fd)
+
+```
+
+```{r}
+plot(residuals(fd_lm),
+     type = 'b',
+     xlab = 'Month (Index)',
+     ylab = 'Residuals',
+     main = 'Residuals vs Month')
+abline(h = 0, lty = 2)
+```
+```{r}
+y21_hat = b1 * (x21 -  x20) + y20
+y21_hat
+```
+
+```{r}
+sigma_hat2 = sum(residuals(fd_lm)^2) / fd_lm$df.residual
+
+#Now we will get our standard error for our prediction
+se_pred = sqrt(sigma_hat2 * (1 + 1/n + ((x21 - mean(x_star))^2 / sum((x_star - mean(x_star))^2))))
+
+# Getting the 99% confidence interval t-value
+t = qt(0.995, df = n-2)
+CI_lower = y21_hat - t * se_pred
+CI_upper = y21_hat + t * se_pred
+
+CI_lower
+CI_upper
+```
+
+```{r}
+# Now to get the Confidence interval for beta_1
+CI_b1fd_lower = b1_fd - t * s_b1_fd
+CI_b1fd_upper = b1_fd + t * s_b1_fd
+CI_b1fd_lower
+CI_b1fd_upper
+```
+
+
+
+Answer: our First differences regression model is: $\hat{Y_t^{'}} = 0.1672902 + 50.06517 * X_t^{'}$
+
+Our selected value for $\hat{\rho}$ is 1 $b_0^{'} = 0.1672902$ and $b_1^{'} = 50.06517$ while $s(b_0^{'} = 0.1329469)$ and $s(b_1^{'} = 0.425571)$
+
+Once again our slope has barely changed in this transformed equation with !transformed data!, but the intercept has greatly reduced almost to 0.
+
+The p-value of our DW test is 0.8374 greater than .05 causng us to fail to reject the null hypothesis and find that there is no positive autocorrelation 
+
+
+Regression equation using original values:
+$Y_t -  Y_{t-1} = 0 + 50.8801 * (X_t -  X_{t-1}) + u_t$
+
+Regression equation usable for predictions with original values:
+$\hat{Y_t} = 0 + 50.8801 * (X_t - X_{t-1}) + \hat{Y_{t-1}}$
+
+Since this method is the equivalent to making so that  rho is now 1, 1-rho which pops up in several places creates some interesting effects. No matter what our y-intercept would be in our original model, it becomes 0 through this transformation. 
+
+To calculate the new $s(\beta_0)$ and $s(\beta_1)$ we need transform our $s(\beta_0^{'})$ and $s(\beta_1^{'})$ using the equations 
+$s(\beta_0) = \frac{s(\beta_0^{'})}{(1-\rho)}$ and $s(\beta_1) = \frac{s(\beta_1^{'})}{(1-\rho)}$
+
+This means we can no longer calculate our standard errors relative to our coefficients when using our untransformed data, at least not in a general way. This makes it harder to evaluate the model compared to the OLS regression and of the other regression methods.
+
+Based on staff working 3,625 hours next month, we can predict the amount we will be billing to be between $\$274,174.60$ and $\$283,537.70$ (constant dollars) with a 99% confidence interval with a specfic predicted amount of $\$278,856.20$. Compared to our previous predictions, once again our range has widened by a few thousand dollars in each direction. This time it decreased by about 2.5k downwards and 3.2k upwards compared to HL which was already a widening compared to CO. It is also widening more at the higher end of the prediction implying it feels less confident with larger values and the specific value predicted only increased by a few hundred dollars. Its lack of movement does imply a loss of confidence at the higher end of the range as opposed to a general shifting of the range. 
+
+Our $\beta_1$ 99% interval is from 48.84 and 51.29, which is once again smaller than previous tests although once again... we are comparing apples and oranges.
+
+Overall this model certainly seems better than just leaving the autocorrelation of our OLS model. It essentially makes us 100% certain that we have tackled the problem of autocorrelation but it is likely overkill. Its difficulty to evaluate and has very large ranges so it seems like its better to use a more precise method. Perhaps the best method would be to do HL and narrow the rho search to between .4 and .3, since .4 was the smallest that it found but that the rho found by CO was in the direction of .3. Since CO is just an estimate then we might get a better number by doing a slighly more exhaustive search. If we end up with .34 then we can refine again or just go with CO.
+
+
+
+
+
+
+i-) Repeat (g) using an autoregressive distributed lag (ARDL) model and compare the prediction against cochrane orcut, hildreth lu and first differeces procedures. Report your findings (10 points).

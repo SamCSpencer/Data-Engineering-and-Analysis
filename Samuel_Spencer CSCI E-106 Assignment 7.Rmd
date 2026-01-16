@@ -1,0 +1,365 @@
+---
+title: 'CSCI E-106:Assignment 7'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+```{r}
+install.packages("glmnet")
+library(glmnet)
+```
+```{r}
+install.packages('MASS')   # run once
+library(MASS)
+```
+```{r}
+library(faraway)
+library(caret)
+library(olsrr)
+```
+
+
+
+### Due Date: October 24, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+
+## Problem 1 
+
+Use the fat data(copy and paste the following command into R console:library(faraway);data(“fat”)), and
+use the percentage of body fat, siri, as the response and the other variables, except brozek and density as potential predictors. Use 70% of the data for train data set and use remaining data (30% of data) for test
+data set (use set.seed(1023)). (50 points)
+
+```{r}
+library(faraway);data("fat")
+```
+```{r}
+data(fat)
+head(fat)
+```
+```{r}
+set.seed(1023)
+
+# splitting the data
+fat_split = createDataPartition(y = fat$siri, p = .7, list = FALSE)
+
+train = fat[fat_split,]
+test = fat[-fat_split,]
+```
+```{r}
+head(train)
+```
+
+
+
+a-)Linear regression with all predictors (5 pts)\newline
+```{r}
+lm = lm(siri ~ age + weight + height + adipos + free + neck + chest + 
+          abdom + hip + thigh + knee + ankle + biceps +
+          forearm + wrist, data = train)
+summary(lm)
+```
+
+Answer our regression formula is: $\hat{siri} = -11.309 + 0.0271 * age + 0.368 * weight + 0.0507 * height - 0.381 * adipos - 0.538 * free +  0.211 * neck + 0.0249 * chest + 0.131 * abdom + 0.0471 * hip + 0.181 * thigh + 0.0694 * knee + 0.125 * ankle + 0.109 * biceps + 0.0950 * forearm - 0.174 * wrist$
+
+```{r}
+ols_test_breusch_pagan(lm)
+plot(lm)
+qchisq(.95, df=1)
+```
+
+
+Answer our regression formula is: $\hat{siri} = -11.309 + 0.0271 * age + 0.368 * weight + 0.0507 * height - 0.381 * adipos - 0.538 * free +  0.211 * neck + 0.0249 * chest + 0.131 * abdom + 0.0471 * hip + 0.181 * thigh + 0.0694 * knee + 0.125 * ankle + 0.109 * biceps + 0.0950 * forearm - 0.174 * wrist$
+
+This initial model seems half decent, but with clear issues. We have a very high R-squared and a very low p-value for the f-score near 0 allowing us to reject the null hypothesis and assume that our model can predict variance in the dependent variable. However, a lot of the variables are not significant. Looking at them, it is interesting to note that these variables would be less predictive as they tend to be joints and locations where the body stores less body fat as well as areas that store some fat but also have muscles that can be most substantially grown through weight lifting, so perhaps it should not be surprising that these variables ended up being not significant. Doing some evaluation of our model, there are clear issues. There is a clear pattern to the residuals, the Q-Q plot shows heavy tails, and the residuals vs leverage plot shows that there are leverage points with two points outside of the Cook's distance and one very far out, so we have an outlier that is very heavily influencing the model. All of this should lead us to not trust our summary statistics of the model and it might not be as predictive as our large Adujusted R-squared (0.973) suggests.
+
+
+
+
+
+b-)Linear regression with variables selected using stepwise (both ways) selection criteria (5 pts)\newline
+
+```{r}
+ols_step_both_p(lm,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+```{r}
+# Creating linear regression model using only the suggested terms from the step
+# wise evaluation
+lm_2 = lm(siri ~ age + weight + adipos + free + neck +
+          abdom + thigh, data = train)
+summary(lm_2)
+```
+
+
+```{r}
+ols_test_breusch_pagan(lm_2)
+plot(lm_2)
+qchisq(.95, df=1)
+```
+Answer our regression formula is: $\hat{siri} = -0.386 + 0.0264 * age + 0.403 * weight - 0.372 * adipos - 0.534 * free +  0.237 * neck + 0.120 * abdom + 0.209 * thigh$
+
+After removing several variables, our model is looking much better with a p-value for the F-statistic still near 0 and an adjusted R-squared that is the same as the full model with 0.973. There are still issues with the residuals however. It does not look like a regular distribution of residuals and a transform is likely necessary.
+
+
+c-)Ridge regression (5 pts)\newline
+
+```{r}
+train_2 = train[ , !(names(train) %in% c('density', 'brozek')) ]
+head(train_2)
+```
+```{r}
+test_2 = test[ , !(names(test) %in% c('density', 'brozek')) ]
+head(test_2)
+```
+
+
+
+```{r}
+x = as.matrix(train_2[, -which(names(train_2) == "siri")])
+y = train_2$siri  
+```
+```{r}
+# Setting lambda to 0 to do Ridge Regression
+rm = glmnet(x, y, alpha = 0)
+print(rm)
+```
+```{r}
+cvr = cv.glmnet(x, y, alpha = 0)
+```
+```{r}
+plot(cvr)
+cvr$lambda.min     
+cvr$lambda.1se 
+```
+```{r}
+coef(cvr, s = "lambda.min")
+```
+
+Answer: Our ridge regression model is: $\hat{siri} = -49.439 + 0.0438 * age + 0.0892 * weight + 0.118 * height + 0.175 * adipos - 0.335 * free +  0.250 * neck + 0.0916 * chest + 0.264 * abdom + 0.165 * hip + 0.213 * thigh + 0.281 * knee + 0.157 * ankle + 0.144 * biceps + 0.101 * forearm - 0.445 * wrist$
+
+
+d-)Lasso (5 pts)\newline
+
+```{r}
+# Setting lambda to 1 to do lasso regression
+cv_lasso = cv.glmnet(x, y, alpha = 1)
+```
+```{r}
+plot(cv_lasso)
+cv_lasso$lambda.min 
+cv_lasso$lambda.1se
+```
+```{r}
+coef(cv_lasso, s = 'lambda.min')
+```
+
+
+
+Our Lasso regression model is: 
+$\hat{siri} = -6.4241 + 0.00422 * age + 0.30846 * weight + 0.03138 * height - 0.46298 * free + 0.06179 * neck + 0.19258 * abdom + 0.08832 * thigh + 0.14281 * knee + 0.02008 * ankle + 0.09679 * biceps + 0.00031 * forearm$
+
+
+
+
+
+e-)Elastic Net (5 pts)\newline
+
+```{r}
+# Setting alpha to 0.5 to do Elastic Net regression
+cv_enet = cv.glmnet(x, y, alpha = 0.5)
+```
+```{r}
+plot(cv_enet)
+cv_enet$lambda.min 
+cv_enet$lambda.1se
+```
+```{r}
+coef(cv_enet, s = 'lambda.min')
+```
+
+Answer:Our Elastic Net regression model is:
+$\hat{siri} = -23.6918 + 0.00133 * age + 0.18054 * weight + 0.02289 * height - 0.37511 * free + 0.11974 * neck + 0.00408 * chest + 0.33696 * abdom + 0.05072 * hip + 0.11894 * thigh + 0.21402 * knee + 0.04526 * ankle + 0.14022 * biceps + 0.02372 * forearm$
+
+
+
+
+f-)Robust Regression (5 pts)\newline
+
+```{r}
+robm = rlm(siri ~ ., data = train_2)
+summary(robm)
+```
+
+Answer: Our Robust Regression model is:
+$\hat{siri} = -1.5202+ 0.0221 * age+ 0.4225 * weight+ 0.0383 * height- 0.3372 * adipos- 0.5645 * free+ 0.1648 * neck+ 0.0120 * chest+ 0.0788 * abdom+ 0.0229 * hip+ 0.1817 * thigh- 0.0148 * knee+ 0.1033 * ankle+ 0.0362 * biceps+ 0.0694 * forearm- 0.0914 * wrist$
+
+
+
+
+
+g-)Use the models you find to predict the response in the test sample. Make a report on the performances of the models. (20 pts)\newline
+
+```{r}
+# Making our matrices from our testing data for comparison
+x_test = as.matrix(test_2[, -which(names(test_2) == "siri")])
+y_test = test_2$siri  
+```
+```{r}
+predicted_train = predict(lm, train_2)
+
+model_train = data.frame(obs = train_2$siri, pred = predicted_train)
+
+defaultSummary(model_train)
+```
+```{r}
+predicted_test = predict(lm, test_2)
+
+model_test = data.frame(obs = test_2$siri, pred = predicted_test)
+
+defaultSummary(model_test)
+```
+
+
+```{r}
+train_3 = train_2[ , !(names(train_2) %in% c('height', 'biceps', 'ankle', 'wrist', 'forearm', 'knee', 'hip', 'chest')) ]
+head(train_3)
+```
+
+```{r}
+test_3 = test_2[ , !(names(test_2) %in% c('height', 'biceps', 'ankle', 'wrist', 'forearm', 'knee', 'hip', 'chest')) ]
+head(test_3)
+```
+
+```{r}
+predicted_train_2 = predict(lm_2, train_3)
+
+model_train_2 = data.frame(obs = train_3$siri, pred = predicted_train_2)
+
+defaultSummary(model_train_2)
+```
+
+```{r}
+predicted_test_2 = predict(lm_2, test_3)
+
+model_test_2 = data.frame(obs = test_3$siri, pred = predicted_test_2)
+
+defaultSummary(model_test_2)
+```
+
+
+```{r}
+y_predr = predict(cvr, s = 'lambda.min', newx = x_test)
+
+mser = mean((y_test - y_predr)^2)
+rmser = sqrt(mser)
+r2r = 1 - sum((y_test - y_predr)^2) / sum((y_test - mean(y_test))^2)
+
+mser
+rmser
+r2r
+```
+
+```{r}
+y_pred_lasso = predict(cv_lasso, s = 'lambda.min', newx = x_test)
+
+mse_lasso = mean((y_test - y_pred_lasso)^2)
+rmse_lasso = sqrt(mse_lasso)
+r2_lasso = 1 - sum((y_test - y_pred_lasso)^2) / sum((y_test - mean(y_test))^2)
+
+mse_lasso
+rmse_lasso
+r2_lasso
+```
+
+```{r}
+y_pred_enet = predict(cv_enet, s = 'lambda.min', newx = x_test)
+
+mse_enet = mean((y_test - y_pred_enet)^2)
+rmse_enet = sqrt(mse_enet)
+r2_enet = 1 - sum((y_test - y_pred_enet)^2) / sum((y_test - mean(y_test))^2)
+
+mse_enet
+rmse_enet
+r2_enet
+```
+```{r}
+y_pred_rob = predict(robm, newdata = test_2)
+
+mse_rob = mean((y_test - y_pred_rob)^2)
+rmse_rob = sqrt(mse_rob)
+r2_rob = 1 - sum((y_test - y_pred_rob)^2) / sum((y_test - mean(y_test))^2)
+
+mse_rob
+rmse_rob
+r2_rob
+```
+
+Answer: Surprisingly, the original full model, despite all of its issues, is outperforming all the regularized, reduced, and robust models when it comes to predicting the values of the test data set. On first glance the full model seems rife with leverage points and issues with distribution that one would expect introducing the biases of the other regression model would reduce the variance but that was not the case. I would at least expect the reduced model to have a lower RMSE because with the train data it had nearly an identical R-squared, so it would seem natural that there would be less error when the model is used on the test data as each insignificant variable can increase noise and make over-fitting more likely. However, this did not happen this time. This is likely due to a coincidental similarity between the test data and the training data, making all biases introduced to reduce variance, add variance instead. Additionally, it might be that the residuals just aren't normal enough to evaluate, and perhaps a transformation before all of these types of regression my show a different result.
+
+From the results we see that robust regression was the only one that was able to slightly outperform the reduced model and got close to the full OLS model. This makes sense as robust regression is attempting to reduce the effect outliers prevent undue influence. As we observed earlier in the leverage vs residuals graph, that is a problem with this model as well as the heavy tails which is the main thing causing the residuals to not be normal. On top of this, ridge regression performed the worst. This indicates that there likely is not a lot of colinearity in our model. This is somewhat surprising given the subject matter as you wouldn't expect all body measurements to be uncorrelated from one another. Ankle size is likely correlated with wrist size for instance, but those are the weaker predictors. I guess it goes to show just how much the human body can vary. 
+
+LASSO outpreformed the other normalizing regressions, showing that random noise from unwanted variables was likely having a bigger effect than colinearity and L1 sparsity. Still it was outperformed by the reduced model on both metrics so its method of picking which variables should be dropped was either less effective than the stepwise evaluation, or potentially how chose to shrink other variables might have introduced error considering it seems the further you get away from the full OLS model then the worse you do.
+
+
+
+
+
+
+
+
+## Problem 2
+
+Use the fat data set in previous example by using the percentage of body fat, siri, as the response and the other variables, except brozek and density as potential predictors.(25 points)
+
+a-)Fit the same model in question 1-a but now using Huber's robust method. Comment on any substantial differences between this model and the least squares fit. (10 points)
+
+```{r}
+model_huber = rlm(siri ~ ., data = train_2, psi = psi.huber)
+
+summary(model_huber)
+```
+```{r}
+pred_huber = predict(model_huber, newdata = test_2)
+
+mse = mean((y_test - pred_huber)^2)
+rmse = sqrt(mse_rob)
+r2 = 1 - sum((y_test - pred_huber)^2) / sum((y_test - mean(y_test))^2)
+
+mse
+rmse
+r2
+```
+
+Answer: Our Huber method robust regression equation is: 
+$\hat{siri} = -1.5202 + 0.0221 * age+ 0.4225 * weight+ 0.0383 * height- 0.3372 * adipos- 0.5645 * free+ 0.1648 * neck+ 0.0120 * chest+ 0.0788 * abdom+ 0.0229 * hip+ 0.1817 * thigh - 0.0148 * knee+ 0.1033 * ankle+ 0.0362 * biceps+ 0.0694 * forearm- 0.0914 * wrist$
+
+Our Hubor regression model has done better than all other reduced, regularized, and robust regression models. However, it still is being outperformed by the OLS model which remains a bit of a mystery as it seems like it would be the exact type of regression that should outperform the OLS regression in the case of extreme tails. It is only very marginally worse and given how everything else has performed, perhaps that still reinforces that extreme tails is the largest problem. This seems to suggest however that the outliers are helping our model perform better on the training data which is surprising, or at least the decrease in variance is being slightly overcome in the trade off with Hubor of the small loss of efficiency when tweeking all the other values.
+
+
+
+
+
+
+b-)Identify which two cases have the lowest weights in the Huber fit. What is unusual about these two points? (5 points)
+
+c-)Plot weight (of the man) against height. Identify the two outlying cases. Are these the same as those identified in the previous question? Discuss.(10 points)
+
+## Problem 3
+
+Using the stackloss data (copy and paste the following command into R console:library(faraway);data(“stackloss”)), fit a model with stack.loss as the response and the other three variables as predictors using the following methods: (25 Points)
+
+a-) Least squares (5 points)\newline
+b-) Huber robust regression method (5 points)\newline
+c-) Bisquare robust regression method (5 points)\newline
+d-) Compare the results. Now use diagnostic methods to detect any outliers or influential points. Remove these points and then use least squares. Compare the results. (10 points)\newline

@@ -1,0 +1,465 @@
+---
+title: 'CSCI E-106:Assignment 5'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+install.packages('lmtest')
+```
+
+```{r}
+library(lmtest)
+library(car)
+library(caret)
+library(olsrr)
+library(MASS)
+library(fastDummies)
+install.packages("ISLR2");library(ISLR2); data(Wage, package="ISLR2")
+install.packages("faraway");library(faraway); data(sat, package="faraway")
+```
+
+### Due Date: October 10, 2025 at 11:59 pm EST
+### Instructions
+
+Students should submit their reports on Canvas. The report needs to clearly state what question is being solved, step-by-step walk-through solutions, and final answers clearly indicated. Please solve by hand where appropriate.
+
+Please submit two files: (1) a R Markdown file (.Rmd extension) and (2) a PDF document, word, or html generated using knitr for the .Rmd file submitted in (1) where appropriate. Please, use RStudio Cloud for your solutions.
+
+--------------------------------------------------------------------------------------
+data(sat,package="faraway")
+
+## Problem 1
+
+Using the sat dataset data under faraway library, data(sat,package="faraway"). Fit a model with the total SAT score as the response and expend, salary, ratio and takers as predictors. Perform regression diagnostics on this model to answer the following questions. Display any plots that are relevant. Do not provide any plots about which you have nothing to say. Suggest possible improvements or corrections to the model where appropriate. (50 points, 10 points each)
+```{r}
+data(sat)
+
+# Displaying the first five rows of the data frame
+head(sat)
+
+# Displaying the structure of the data frame like data type and number of observations
+str(sat)
+
+# Printing basic statistical markers for the values in each column such as the 
+# quartiles, extreme values, and the mean
+summary(sat)
+
+# Displaying the correlations (Pearson r) between every possible pair of 
+# variables.
+cor(sat[, sapply(sat, is.numeric)])
+
+```
+```{r}
+??sat
+```
+```{r}
+lm = lm(total ~ expend + salary + ratio + takers, data = sat)
+summary(lm)
+```
+```{r}
+anova(lm)
+```
+```{r}
+ols_test_breusch_pagan(lm)
+plot(lm)
+qchisq(.95, df=1)
+```
+
+```{r}
+
+# All significant statistics looked to have remained the same or increased by 
+# one in the manner expected. Now to repeat attempt at Box-Cox
+bc = boxcox(lm,lambda=seq(-3,2,0.05))
+
+# Finding optimal lambda value
+lambda = bc$x[which.max(bc$y)]
+lambda 
+```
+The Q-Q plot implies that the residuals are quite normal with a few large outliers on the right providing a minor skew. The fitted residuals show a pattern, but it seems to mostly be caused by clustering of two groups at the extremes of our data, with a small group in the center that are slightly lower that likely have an out-sized effect on causing a bow shape. This could simply be due to some randomness due to a lack of representation at those values. S-L and Residuals vs Leverage both look good. Utah is close to the cooks distance which may reflect its location in the Q-Q plot. All of this is quite relevant in the Box-Cox test which gives us a lambda of -2.1 which is quite low and implies a detected need to clamp down on some of the upper extreme values. However, the 95% confidence interval is very wide implying that the data is likely not very sensitive to a transform and doing any particular transform likely won't increase our R-squared very much. It's likely a quite linear relationship with just a couple nearly extreme outliers giving the model a little bit of pause but with no clear ideal transform to remedy them.
+
+
+```{r}
+ols_step_best_subset(lm,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+
+```{r}
+ols_step_both_p(lm,p_enter=0.1,p_remove=0.05,details=FALSE)
+
+```
+Interestingly, when examining which variables should be removed, the variable with the highest coefficient p-value, expend, is not recommended to be dropped by stepwise both ways and stepwise best subsets test. Similarly the ANOVA table also says its removal will have the highest impact on the model. The best subset shows that a model with takers and expend together has the ideal values for every evaluative statistic and it also has a large increase to R-squared. 
+
+```{r}
+pairs(sat)
+```
+Expend and salary look highly correlated, and best subset implies shows that the best group of three excludes expend. This makes me think there is a high covariance between expend and salary and while salary and ratio together explain more variance, expend on its own explains nearly as much with less complexity.
+
+```{r}
+lm_lite = lm(total ~ takers + expend, data = sat)
+summary(lm_lite)
+```
+```{r}
+ols_test_breusch_pagan(lm_lite)
+plot(lm_lite)
+qchisq(.95, df=1)
+```
+Breusch-Pagan tests look very similar if not slightly improved with the smaller model particularly with the Q-Q and leverage vs residuals.
+
+Our model is $\hat{Total} = 993.83 - 2.85 * Takers + 12.29 * Expend$
+
+a-) Check the constant variance assumption for the errors.
+
+```{r}
+bptest(lm_lite, studentize = FALSE)
+```
+Answer: We have a p-value of = .796 above our $\alpha=.05$ threshold implying that we fail to reject the null hypothesis of homoskedasticity and suggests our model explains variance constantly throughout the model. This is in line with our S-L plot from earlier which did not show any funnel pattern.
+
+b-) Check the normality assumption.
+
+```{r}
+ols_test_normality(lm_lite)
+```
+
+Answer:  Most of our tests imply normalcy. All of them fail to reject the null hypothesis that the residuals are normal except the Cramer-von Mises test which does reject the null hypothesis and supports that the data is not normal. This is likely due to the slightly more erratic distribution at the tails, which Cramer-von Mises. The Residual vs Leverage plot from earlier did not imply any points were having an overly-distorting effect on the model. Given our other plots and tests showed relative normalcy as well it seems safe to assume that the residuals are normal enough to trust analysis of the model.
+
+
+
+
+
+c-) Check for large leverage points.
+
+```{r}
+# Calculating a leverage threshold of 2 * Coefficients [3] / observations [50] 
+# which is .12. Then comparing each observations hat value against it to see
+# if the point has an outsized leverage.
+
+#Displaying hat values
+p = length(coef(lm_lite))
+n = length(sat$total)
+hii =  hatvalues(lm_lite)
+hii = round(hii,2)
+hii
+
+# Gettiing count of leverage points
+sum(hii > round((2*p/n),2))
+
+# Identfying leverage points
+(hii > round((2*p/n),2))
+
+```
+```{r}
+# Plotting leverage points and outliers relative to the thresholds
+ols_plot_resid_lev(lm_lite)
+```
+Answer: We can see from our two leverage analyses that there are three points that have high leverage above our threshold of .12 with another point right on the threshold line. However, none of these points are outliers meaning our model handles these points quite and the outliers quite well and explains why none of them appear beyond the cook distance in the Residuals vs Leverage plot. These four points (or at least some of them) are likely the four points that are plotted centrally in our residuals vs fitted plot that seem to be causing the bowing curve. Their residuals aren't very large so the model can predict them decently well but because they are quite isolated in the middle of the model and are a bit lower than expected, then they are having a larger effect on the model than their counterparts and causing the loess smoothe to distort downward.
+
+
+
+
+
+
+d-) Check for outliers.
+
+```{r}
+# Plotting looking for outliers  for the modelin two slightly different formats 
+# for readability.
+ols_plot_cooksd_bar(lm_lite)
+ols_plot_cooksd_chart(lm_lite)
+```
+```{r}
+# Plotting the outliers of each individual observations for each coefficient 
+# based on whether removing that coefficient has a large effect on the
+# estimation of the coefficient by the model.
+cutoff = 2/sqrt(n)
+ols_plot_dfbetas(lm_lite)
+```
+```{r}
+print(sat[c(2,29,48),0])
+```
+```{r}
+print(sat[c(2,7,40,44),0])
+```
+```{r}
+print(sat[c(2,29,40,48),0])
+```
+```{r}
+print(sat[c(40,29,21,15),0])
+```
+
+Answer: Several points here were flagged as outliers, the main three points that were outliers for the entire model were Alaska, New Hampshire and West Virginia. All three plus South Carolina were outliers for determining the expend coefficient. South Carolina was an outlier for every single coefficient but not for the model as a whole. Only New Hampshire was an outlier for both takers and the model as a whole. I will guess that this is related to the fact that takers has the lower p-value and has higher influence on the model, meaning the model is more resilient to its outliers and fits its outliers better. Alaska is interesting as it was previously flagged as a leverage point but not as an outlier in our leverage threshold plot, but was flagged as an outlier in our residuals vs leverage plot but not passed the cook distance. It is just at the threshold for our outlier plot and the smallest point past the leverage threshold so the effects of being an outlier and leverage point seem to not quite combine to surpass the cook's distance.
+
+
+
+
+e-) Check for influential points.
+
+```{r}
+influencePlot(lm_lite, id="noteworthy", main="Influence Plot",
+sub="Circle size is proportional to Cook's distance")
+```
+
+Answer: All of our points have quite low influence. Generally a Cook's Distance of 4/n which for us is 4/50 = 0.08 is the threshold for a mild suspicion of outsized influence but unlikely to distort the model, and a distance of 1 is where you start to really suspect distortion of the model. Having our largest point have a Cook's Distance of .13 for our most influential point shows quite strong model integrity. 
+
+
+
+
+
+## Problem 2
+
+Use the Wage data set under ISLR2, data(Wage,package="ISLR2"). Use wage variable (workers wage) as your dependent variable and others as independent variable. Please note that there is also logwave variable (Log of workers wage) and do not use this variable as an independent variable. (50 points, 10 points each)
+
+```{r}
+data(Wage)
+
+head(Wage)
+
+# Displaying the structure of the data frame like data type and number of observations
+str(Wage)
+
+# Printing basic statistical markers for the values in each column such as the 
+# quartiles, extreme values, and the mean
+summary(Wage)
+
+# Displaying the correlations (Pearson r) between every possible pair of 
+# variables.
+cor(Wage[, sapply(Wage, is.numeric)])
+
+pairs(Wage)
+```
+```{r}
+df = subset(Wage, select = -logwage)
+```
+```{r}
+head(df)
+```
+
+```{r}
+# Create dummy variables (only necessary)
+df = dummy_cols(df, select_columns = c('marital', 'race', 'education', 'region', 'jobclass', 'health', 'health_ins'), remove_first_dummy = TRUE)
+head(df)
+# Drop unnecessary variable X2
+df<-df[-c(3:9)]
+# Do a little variable selection, check every p-value must be less than 0.05
+```
+```{r}
+head(df,20)
+```
+```{r}
+lm2 = lm(wage ~ ., data = df)
+```
+```{r}
+summary(lm2)
+```
+
+```{r}
+# Checking if all region variables were dropped from the model due to all 
+# columns only having one variable. I.E. all observations made of people from
+# the same region.
+sapply(df[ , grep("region", names(df))], function(x) length(unique(x)))
+```
+```{r}
+sapply(df[ , grep("region", names(df))], function(x) table(x, useNA = "ifany"))
+```
+```{r}
+# All data of people from Mid Atlantic. Remaking model without region.
+df = subset(Wage, select = -c(logwage, region))
+
+# Create dummy variables (only necessary)
+df = dummy_cols(df, select_columns = c('marital', 'race', 'education', 'jobclass', 'health', 'health_ins'), remove_first_dummy = TRUE)
+
+# Drop unnecessary variable X2
+df<-df[-c(3:8)]
+# Do a little variable selection, check every p-value must be less than 0.05
+head(df)
+```
+```{r}
+lm2 = lm(wage ~ ., data = df)
+summary(lm2)
+```
+```{r}
+anova(lm2)
+```
+```{r}
+ols_test_breusch_pagan(lm2)
+plot(lm2)
+qchisq(.95, df=1)
+```
+
+
+
+a-) Analyze the all the categorical variables by doing side by side boxplots and investigation basic statistics. Comment on your findings.
+
+```{r}
+# Creating a boxplot to compare distribution across the various catagories
+# compared against wage
+boxplot(wage ~ education, data=Wage,
+        xlab='Education Level' , ylab="Wages")
+boxplot(wage ~ race, data=Wage,
+        xlab='Race' , ylab="Wages")
+boxplot(wage ~ jobclass, data=Wage,
+        xlab='Jobclass' , ylab="Wages")
+boxplot(wage ~ health, data=Wage,
+        xlab='Personal Health Condition' , ylab="Wages")
+boxplot(wage ~ health_ins, data=Wage,
+        xlab='Has Health Insurance' , ylab="Wages")
+```
+Answer: Its very clear that there are quite distinct relationships between each group and wage, often aligning with conventional thinking and known societal trends. People in informational roles tend to have higher wages than people in industry but with a similar floor, people who have health insurance have higher wages, the higher level of education leads to higher wages and so on. Interestingly while people of Asian descent seem to have a higher median and 1st and 3rd quartiles than white people for wages but white people appear to have more outliers. White people seem to in general have the widest standard deviation.
+
+b-) Create dummy variables
+
+```{r}
+# Education looks like it would be best treated ordinally so I am going to 
+# retool my data frame with that in mind
+data(Wage)
+
+df_ord = subset(Wage, select = -c(logwage, region))
+
+head(df_ord)
+
+```
+```{r}
+unique(df_ord$education)
+```
+
+```{r}
+# Removing everything after the number in each entry and converting to numeric
+df_ord$education = as.numeric(substr(as.character(df_ord$education), 1, 1))
+
+head(df_ord)
+
+```
+```{r}
+
+# Create dummy variables (only necessary)
+df_ord = dummy_cols(df_ord, select_columns = c('marital', 'race', 'jobclass', 'health', 'health_ins'), remove_first_dummy = TRUE)
+
+# Drop unnecessary variable X2
+df_ord = df_ord[-c(3,4,6:8)]
+# Do a little variable selection, check every p-value must be less than 0.05
+head(df_ord)
+```
+
+
+
+
+
+c-) Create train and test data sets. Use 70% of the data for train data set and use remaining data (30% of data) for test data set (use set.seed(304)). 
+
+```{r}
+# Selecting the seed to reference for reproducability when splitting
+# the data
+set.seed(304)
+
+# splitting the data
+wage_split = createDataPartition(y = df_ord$wage, p = .7, list = FALSE)
+
+train = df_ord[wage_split,]
+test = df_ord[-wage_split,]
+```
+```{r}
+head(train)
+```
+
+
+
+d-) Build a regression models to predict Wage and Answer the questions posed in the previous question on the train data set. Do you need to transfrom Y? If so, transform Y. Make sure that all variables are significant on the model.
+
+```{r}
+lm3 = lm(wage ~ ., data = train)
+summary(lm3)
+```
+
+This is slightly worse R-Squared but that might just be because we are using a smaller sample size from splitting up the data. I will test it against the full data set just to compare it to the non ordinal version
+
+```{r}
+lm4 = lm(wage ~ ., data = df_ord)
+summary(lm4)
+```
+
+```{r}
+ols_test_breusch_pagan(lm3)
+plot(lm3)
+qchisq(.95, df=1)
+```
+```{r}
+bc = boxcox(lm4,lambda=seq(-3,2,0.05))
+
+# Finding optimal lambda value
+lambda = bc$x[which.max(bc$y)]
+lambda 
+```
+```{r}
+# Adding a column to the train data frame for our transformed values of lambda
+# for easy reference when plotting
+train$wage_bc = (train$wage^lambda - 1)/lambda
+
+test$wage_bc = (test$wage^lambda - 1)/lambda
+
+train = subset(train, select = -wage)
+test = subset(test, select = -wage)
+
+# Creating linear model against transformed data
+lm_bc = lm(wage_bc ~ ., data = train)
+summary(lm_bc)
+```
+```{r}
+head(train)
+summary(lm_bc)
+```
+```{r}
+ols_step_best_subset(lm_bc,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+```{r}
+ols_step_both_p(lm_bc,p_enter=0.1,p_remove=0.05,details=FALSE)
+```
+```{r}
+# Removing values that are insignificant
+lm_reduc = lm(wage_bc ~ year + age + education + `race_2. Black` + `health_2. >=Very Good` + `health_ins_2. No`, data = train)
+```
+```{r}
+summary(lm_reduc)
+```
+
+```{r}
+ols_test_breusch_pagan(lm_reduc)
+plot(lm_reduc)
+qchisq(.95, df=1)
+```
+
+
+Answer: Our regression equation is:
+
+$\hat{wage} = (0.1( -5.75 +  0.00375*year + 0.00167*age +  0.0348*education - 0.0174 * race_{Black} + 0.0247 * health_{Very Good} - 0.0646*HealthInsurance_{No})+1)^{10}$
+
+The model has an p-value for its f-statistic near zero but an adjusted R-squared of only 0.3395 so we can be confident that the model does explain around .34% of the variance. Not extremely predictive but considering the huge stratification of wealth, it seems to be a pretty solid model. The data is decently normal but still has very heavy tails despite data transformation. There are no points beyond the cook distance which is pretty excellent considering the size and nature of the data. The loess smoothes for each plot are all nearly ideal.
+
+
+
+
+
+
+e-) Test the model performance on the test data set and comment on your findings.
+
+```{r}
+# Evaluating transformed model on training data for comparison
+predicted_train_bc = predict(lm_reduc, train)
+
+model_train_bc = data.frame(obs = train$wage_bc, pred = predicted_train_bc)
+
+defaultSummary(model_train_bc)
+```
+```{r}
+# Evaluating model on transformed test data
+predicted_test_bc = predict(lm_reduc, test)
+
+model_test_bc = data.frame(obs = test$wage_bc, pred = predicted_test_bc)
+
+defaultSummary(model_test_bc)
+```
+
+Mean squared error rose from 0.0668 to 0.0691. This is a negligable rise, showing that the model is not over fitting.
